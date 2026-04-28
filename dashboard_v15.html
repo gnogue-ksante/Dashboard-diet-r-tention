@@ -1,0 +1,974 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --font: 'DM Sans', sans-serif; --mono: 'DM Mono', monospace;
+  --r-lg: 14px; --r-xl: 20px; --trans: 140ms ease;
+  --db: #5B0F9E; --db-l: #EDE0FF; --db-m: #C9A8F5; --db-d: #3D0A6E;
+  --kd: #A8D94A; --kd-l: #EEF9D0; --kd-m: #CAEA82; --kd-d: #5A7A1A;
+}
+.shell { padding: 0 0 2rem; font-family: var(--font); }
+
+/* ── NAV ── */
+.nav-strip { display:flex; flex-wrap:wrap; gap:6px; padding-bottom:16px; border-bottom:1px solid var(--color-border-tertiary); margin-bottom:18px; }
+.nb { font-size:12px; font-weight:500; padding:5px 13px; border-radius:20px; cursor:pointer; border:1px solid var(--color-border-tertiary); background:var(--color-background-secondary); color:var(--color-text-secondary); transition:var(--trans); }
+.nb:hover { color:var(--color-text-primary); border-color:var(--color-border-secondary); }
+.nb.on { background:var(--color-text-primary); color:var(--color-background-primary); border-color:var(--color-text-primary); }
+.nb.all-nb { border-color:var(--db); color:var(--db); }
+.nb.all-nb.on { background:var(--db); color:#fff; }
+.nb.nb-cl { border-color:#185FA5; color:#185FA5; }
+.nb.nb-cl.on { background:#185FA5; color:#fff; border-color:#185FA5; }
+.nb.nb-ltv { border-color:#0F6E56; color:#0F6E56; }
+.nb.nb-ltv.on { background:#0F6E56; color:#fff; border-color:#0F6E56; }
+.panel { display:none; } .panel.on { display:block; }
+
+/* ── HEADER ── */
+.hcard { display:flex; align-items:flex-start; gap:14px; padding:18px 20px; border-radius:var(--r-xl); background:var(--color-background-secondary); border:1px solid var(--color-border-tertiary); margin-bottom:14px; }
+.av { width:48px; height:48px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:600; border:2px solid transparent; }
+.hinfo .hname { font-size:18px; font-weight:600; color:var(--color-text-primary); margin-bottom:3px; }
+.hinfo .hsub  { font-size:12px; color:var(--color-text-secondary); margin-bottom:7px; }
+.bdg { display:inline-block; font-size:11px; font-weight:500; padding:3px 9px; border-radius:20px; line-height:1.4; }
+.bdg-int  { background:var(--db-l); color:var(--db-d); border:1px solid var(--db-m); }
+.bdg-ext  { background:var(--color-background-secondary); color:var(--color-text-secondary); border:1px solid var(--color-border-tertiary); }
+.bdg-all  { background:var(--db-l); color:var(--db); border:1px solid var(--db); }
+.bdg-warn { background:#FFF3E0; color:#B45309; border:1px solid #FCD34D; }
+
+/* ── KPI GRID ── */
+.kpi-grid { display:grid; grid-template-columns:160px 1fr 1.8fr; gap:10px; margin-bottom:14px; align-items:stretch; }
+
+/* période */
+.per-card { border-radius:var(--r-lg); border:1px solid var(--color-border-tertiary); background:var(--color-background-primary); padding:12px 14px; display:flex; flex-direction:column; gap:6px; }
+.per-ttl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-secondary); margin-bottom:4px; }
+.per-btn { font-size:13px; font-weight:500; padding:11px 14px; border-radius:10px; border:1.5px solid var(--color-border-tertiary); background:transparent; color:var(--color-text-secondary); cursor:pointer; text-align:left; transition:var(--trans); width:100%; line-height:1.2; }
+.per-btn:hover { color:var(--color-text-primary); border-color:var(--color-border-secondary); background:var(--color-background-secondary); }
+.per-btn.on { background:var(--color-text-primary); color:var(--color-background-primary); border-color:var(--color-text-primary); box-shadow:0 2px 8px rgba(0,0,0,.18); font-size:16px; font-weight:700; padding:13px 14px; }
+
+/* rangs */
+.rang-card { border-radius:var(--r-lg); border:1px solid var(--color-border-tertiary); background:var(--color-background-primary); overflow:hidden; display:flex; flex-direction:column; }
+.rang-row { padding:10px 14px; border-bottom:1px solid var(--color-border-tertiary); flex:1; display:flex; flex-direction:column; justify-content:center; }
+.rang-row:last-child { border-bottom:none; }
+.rang-lbl { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-secondary); margin-bottom:4px; display:flex; align-items:center; gap:5px; }
+.rang-val { font-size:21px; font-weight:700; line-height:1; }
+.rang-val em { font-size:12px; font-weight:400; font-style:normal; color:var(--color-text-secondary); }
+.rang-sub { font-size:11px; color:var(--color-text-secondary); margin-top:2px; }
+
+.kpi-c { padding:13px 15px; border-radius:var(--r-lg); border:1px solid var(--color-border-tertiary); background:var(--color-background-primary); }
+.kpi-lbl { font-size:11px; font-weight:500; color:var(--color-text-secondary); margin-bottom:7px; text-transform:uppercase; letter-spacing:.06em; line-height:1.3; }
+.kpi-val { font-size:22px; font-weight:600; line-height:1; margin-bottom:3px; }
+.kpi-sub { font-size:11px; color:var(--color-text-secondary); }
+
+/* ── MARGE CARD ── */
+.mc { padding:13px 15px; border-radius:var(--r-lg); border:1px solid var(--color-border-tertiary); background:var(--color-background-primary); display:flex; flex-direction:column; }
+.mc-ttl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-secondary); margin-bottom:10px; }
+.mc-rows { display:flex; flex-direction:column; gap:9px; }
+.mc-row { display:flex; flex-direction:column; gap:4px; }
+.mc-top { display:flex; align-items:baseline; gap:7px; }
+.mc-dot { width:9px; height:9px; border-radius:2px; flex-shrink:0; position:relative; top:-1px; }
+.mc-brand { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; min-width:36px; }
+.mc-v { font-family:var(--mono); font-size:17px; font-weight:600; }
+.mc-d { font-size:11px; margin-left:2px; }
+.mc-d.up { color:#0D9060; } .mc-d.dn { color:#C0392B; }
+.mc-bs { padding-left:18px; }
+.mc-bw { position:relative; height:6px; border-radius:10px; background:var(--color-border-tertiary); margin-bottom:4px; overflow:visible; }
+.mc-mk { position:absolute; top:-3px; width:2px; height:12px; border-radius:1px; background:var(--color-text-secondary); opacity:.4; }
+.mc-bf { height:100%; border-radius:10px; position:absolute; left:0; top:0; }
+.mc-lg { display:flex; justify-content:space-between; }
+.mc-li { display:flex; flex-direction:column; gap:1px; }
+.mc-ll { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--color-text-secondary); opacity:.7; }
+.mc-lv { font-family:var(--mono); font-size:10px; font-weight:600; color:var(--color-text-secondary); }
+.mc-sep { height:1px; background:var(--color-border-tertiary); margin:1px 0; }
+.mc-note { margin-top:8px; padding-top:8px; border-top:1px solid var(--color-border-tertiary); font-size:9.5px; color:var(--color-text-secondary); line-height:1.5; }
+.mc-note strong { color:var(--color-text-primary); font-weight:600; }
+
+/* ── BRAND LEGEND ── */
+.bleg { display:flex; gap:14px; margin-bottom:12px; }
+.bleg-item { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:500; color:var(--color-text-secondary); }
+.bleg-dot { width:11px; height:11px; border-radius:3px; }
+
+/* ── TABS ── */
+.tab-bar { display:flex; gap:2px; margin-bottom:14px; background:var(--color-background-secondary); border-radius:10px; padding:3px; width:fit-content; }
+.tb { font-size:12px; font-weight:500; padding:6px 14px; border-radius:8px; cursor:pointer; border:none; background:transparent; color:var(--color-text-secondary); transition:var(--trans); }
+.tb:hover { color:var(--color-text-primary); }
+.tb.on { background:var(--color-background-primary); color:var(--color-text-primary); box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.tb-analyse { font-size:16px; font-weight:700; padding:7px 20px; }
+.tb-analyse.on { font-size:16px; }
+.tab-c { display:none; } .tab-c.on { display:block; }
+
+/* ── ANALYSE ── */
+.an-sec { display:flex; flex-direction:column; gap:14px; }
+.b-sec { border-radius:var(--r-lg); overflow:hidden; border:1px solid var(--color-border-tertiary); }
+.b-hd { display:flex; align-items:center; gap:10px; padding:11px 16px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+.b-bd { padding:14px 16px; background:var(--color-background-primary); font-size:13px; color:var(--color-text-secondary); line-height:1.75; }
+.b-bd strong { color:var(--color-text-primary); font-weight:600; }
+.verdict { padding:14px 18px; border-radius:var(--r-lg); border-left:3px solid var(--db); background:var(--color-background-secondary); border-top:1px solid var(--color-border-tertiary); border-right:1px solid var(--color-border-tertiary); border-bottom:1px solid var(--color-border-tertiary); }
+.verdict-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--db); margin-bottom:5px; }
+.verdict-txt { font-size:13px; color:var(--color-text-secondary); line-height:1.7; }
+.verdict-txt strong { color:var(--color-text-primary); font-weight:600; }
+
+/* ── TABLE ── */
+.tw { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:12.5px; }
+thead tr { border-bottom:1px solid var(--color-border-tertiary); }
+th { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--color-text-secondary); padding:8px 10px; text-align:left; white-space:nowrap; }
+td { padding:9px 10px; color:var(--color-text-primary); border-bottom:1px solid var(--color-border-tertiary); white-space:nowrap; vertical-align:middle; }
+tr:last-child td { border-bottom:none; }
+
+/* row colors matching capture */
+.rw-db   td { background:rgba(91,15,158,.03); }
+.rw-kd   td { background:rgba(90,122,26,.04); }
+.rw-tot  td { background:rgba(91,15,158,.07); font-weight:500; }
+tr:hover td { background:var(--color-background-secondary) !important; }
+
+.pill { display:inline-block; padding:2px 8px; border-radius:5px; font-size:11px; font-weight:600; font-family:var(--mono); }
+.p-db  { background:var(--db-l); color:var(--db); }
+.p-kd  { background:var(--kd-l); color:var(--kd-d); }
+.p-tot { background:#F3F4F6; color:#374151; }
+
+.rk { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; font-size:12px; font-weight:700; font-family:var(--mono); }
+.r1{background:#DCFCE7;color:#14532D}.r2{background:#D1FAE5;color:#065F46}.r3{background:#CCFBF1;color:#0F766E}
+.r4{background:#F3F4F6;color:#374151}.r5{background:#F3F4F6;color:#6B7280}.r6{background:#F9FAFB;color:#9CA3AF}
+.r7{background:#FEF3C7;color:#92400E}.r8{background:#FEE2E2;color:#991B1B}.r9{background:#FEE2E2;color:#7F1D1D}
+
+.bt { width:60px; height:5px; background:var(--color-border-tertiary); border-radius:10px; display:inline-block; vertical-align:middle; overflow:hidden; }
+.bf { height:100%; border-radius:10px; }
+.bfg{background:#0D9060}.bfr{background:#C0392B}.bfdb{background:var(--db)}.bfkd{background:var(--kd-d)}
+
+.c-db{color:var(--db)}.c-kd{color:var(--kd-d)}.c-g{color:#0D9060}.c-r{color:#C0392B}.c-a{color:#B45309}.c-mu{color:var(--color-text-secondary)}
+.ev-up{color:#0D9060;font-size:16px;font-weight:700}.ev-dn{color:#C0392B;font-size:16px;font-weight:700}.ev-eq{color:var(--color-text-secondary);font-size:16px}
+
+/* LTV section headers */
+.ltv-hd { display:flex; align-items:center; gap:8px; margin:0 0 8px; }
+.ltv-sec { margin-bottom:18px; }
+.ref-bar { padding:9px 12px; background:var(--color-background-secondary); border-radius:8px; font-size:11px; color:var(--color-text-secondary); margin-top:10px; }
+.ref-bar strong { color:var(--color-text-primary); font-weight:600; }
+
+/* ALL banner */
+.all-bn { padding:14px 18px; border-radius:var(--r-lg); background:var(--db-l); border:1px solid var(--db-m); margin-bottom:14px; }
+.all-bn-t { font-size:11px; font-weight:700; color:var(--db); text-transform:uppercase; letter-spacing:.07em; margin-bottom:4px; }
+.all-bn-b { font-size:12.5px; color:var(--db-d); line-height:1.55; }
+.all-bn-b strong { font-weight:600; }
+.ablk { padding:15px 18px; border-radius:var(--r-lg); background:var(--color-background-secondary); border:1px solid var(--color-border-tertiary); }
+.ablk-t { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--color-text-secondary); margin-bottom:9px; padding-bottom:8px; border-bottom:1px solid var(--color-border-tertiary); }
+.ablk-b { font-size:13px; color:var(--color-text-secondary); line-height:1.75; }
+.ablk-b strong { color:var(--color-text-primary); font-weight:600; }
+/* ── CHART ── */
+.chart-wrap { padding:16px; border-radius:var(--r-lg); border:1px solid var(--color-border-tertiary); background:var(--color-background-primary); margin-bottom:14px; }
+.chart-ttl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-text-secondary); margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; }
+.chart-leg { display:flex; gap:14px; }
+.chart-leg-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--color-text-secondary); }
+.chart-svg { width:100%; overflow:visible; }
+.chart-toggle { display:flex; gap:4px; margin-bottom:12px; }
+.ct-btn { font-size:11px; font-weight:600; padding:4px 12px; border-radius:6px; cursor:pointer; border:1.5px solid var(--color-border-tertiary); background:transparent; color:var(--color-text-secondary); transition:var(--trans); }
+.ct-btn:hover { color:var(--color-text-primary); border-color:var(--color-border-secondary); }
+.ct-btn.on { border-color:var(--db); color:var(--db); background:var(--db-l); }
+.chart-ref-line { stroke-dasharray:4,3; stroke-width:1; opacity:.5; }
+.chart-area { opacity:.08; }
+
+.sr { display:flex; gap:10px; align-items:baseline; padding:6px 10px; background:var(--color-background-primary); border-radius:8px; border:1px solid var(--color-border-tertiary); }
+.sv { font-family:var(--mono); font-size:11px; font-weight:600; min-width:68px; }
+.sl { font-size:12px; color:var(--color-text-secondary); }
+</style>
+
+<div class="shell">
+  <div class="nav-strip" id="nav"></div>
+  <div id="panels"></div>
+</div>
+
+<script>
+const P=['Oct–Déc 25','Sept–Nov 25','Août–Oct 25','Juil–Sept 25'];
+const REF={DB:{sans:447,suivi:586},KD:{sans:306,suivi:620},TOT:{sans:400,suivi:591}};
+
+const allData={
+  margeDB:[1.31,1.29,1.28,1.25],
+  margeKD:[2.03,1.86,1.75,1.84],
+  totCDB:[1159,1821,1990,1759],totCKD:[386,638,719,729],
+  maSuDB:[586,604,604,585],
+  maSuKD:[620,575,544,532],
+  maSnDB:[447,469,472,468],
+  maSnKD:[306,309,311,289],
+};
+
+const diets=[
+  {name:'Amanda',ini:'AM',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'ext',slabel:'Externe · ~10h/sem.',summary:'Profil bas de tableau · dégradation oct–déc',
+   margeDB:[{v:.8788,r:8},{v:.9123,r:7},{v:.9272,r:7},{v:.9624,r:7}],
+   margeKD:[{v:.8919,r:6},{v:.8087,r:8},{v:.8768,r:7},{v:.8271,r:6}],
+   margeTOT:[{v:.8816,r:9},{v:.8935,r:7},{v:.9143,r:8},{v:.9288,r:7}],
+   mvsDB:[1.1521,1.1748,1.1864,1.2030],mvsKD:[1.8072,1.5049,1.5338,1.5225],mvsTOT:[1.3025,1.2971,1.3140,1.3579],
+   mDB:[515,551,560,563],mKD:[553,465,477,440],mTOT:[521,537,544,535],
+   poolDB:[3.80,3.90,3.37,2.50],poolKD:[2.33,2.19,2.23,1.78],
+   cDB:[44,71,67,44],cKD:[9,14,16,13],
+   m0DB:515,m0KD:553,m0TOT:521,
+   atot:`<strong>Amanda</strong> est 9ème en TOTAL sur la dernière période (521€, -11.8% vs moyenne équipe). Sa marge recule sur DB et son rang TOTAL se dégrade. Ses clients génèrent +30% de plus que des clients non suivis — signal positif mais insuffisant au regard du benchmark équipe.`,
+   adb:`Sur <strong>Dietbon</strong>, Amanda est 8ème (515€) — en recul par rapport à sept–nov (551€). Son ratio vs hors-suivi (×1.15) est le plus faible de l'équipe sur cette marque : ses clients DB génèrent seulement 15% de plus que des clients sans suivi.`,
+   akd:`Sur <strong>KitchenDiet</strong>, Amanda remonte à 6ème (553€, ×1.81 vs hors-suivi) — un signal positif. Prudence : 9 clients seulement. L'écart entre son impact KD (×1.8) et son impact DB (×1.15) mérite une analyse qualitative approfondie.`,
+   verdict:"Dégradation notable sur la dernière période, surtout sur DB. L'écart entre impact KD et DB est structurel. Priorité : comprendre ce qui différencie son suivi sur les deux marques et définir un plan d'action DB ciblé."},
+
+  {name:'Axelle',ini:'AX',bg:'#EEF9D0',fg:'#3D5A12',ring:'#CAEA82',status:'ext',slabel:'Externe · ~10h/sem.',summary:'5ème TOTAL · rebond KD spectaculaire oct–déc',
+   margeDB:[{v:.9846,r:7},{v:.9917,r:5},{v:.9437,r:6},{v:.9829,r:6}],
+   margeKD:[{v:1.2,r:3},{v:.8574,r:7},{v:.8438,r:8},{v:.5432,r:9}],
+   margeTOT:[{v:1.0169,r:5},{v:.9700,r:6},{v:.9294,r:7},{v:.9167,r:9}],
+   mvsDB:[1.2908,1.2772,1.2076,1.2286],mvsKD:[2.4314,1.5955,1.4759,1.0],mvsTOT:[1.5025,1.4082,1.3357,1.3401],
+   mDB:[577,599,570,575],mKD:[744,493,459,289],mTOT:[601,583,553,528],
+   poolDB:[2.59,2.42,3.02,2.33],poolKD:[1.30,1.25,1.53,1.10],
+   cDB:[30,44,60,41],cKD:[5,8,11,8],
+   m0DB:577,m0KD:744,m0TOT:601,
+   atot:`<strong>Axelle</strong> passe pour la première fois au-dessus de la moyenne équipe en TOTAL (rang 5, +1.7%). Sa trajectoire sur 4 périodes est la plus impressionnante de l'équipe : de 9ème à 5ème. Son ratio TOTAL vs hors-suivi progresse de 1.34x à 1.50x.`,
+   adb:`Sur <strong>Dietbon</strong>, Axelle est 7ème (577€) — légère baisse vs sept–nov. Son ratio DB vs hors-suivi (×1.29) reste solide. DB reste sa marque la plus stable.`,
+   akd:`Sur <strong>KitchenDiet</strong>, Axelle est 3ème (744€, ×2.43 vs hors-suivi) — un bond exceptionnel depuis le plancher de juil–sept (289€, soit ×1.0 — aucune valeur ajoutée vs non-suivi). Seulement 5 clients KD : robustesse statistique limitée.`,
+   verdict:"Trajectoire remarquable sur 4 périodes. Le rebond KD est spectaculaire mais fragile (5 clients). Objectif : confirmer KD sur un volume plus large et stabiliser DB au-dessus du seuil équipe."},
+
+  {name:'Barbara',ini:'BA',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'int',slabel:'Interne · 35h/sem.',summary:'4ème stable sur 4 périodes · fiabilité exemplaire',
+   margeDB:[{v:1.0307,r:4},{v:1.0166,r:4},{v:1.0149,r:4},{v:1.0085,r:3}],
+   margeKD:[{v:.9645,r:4},{v:1.0643,r:3},{v:1.0018,r:5},{v:.9831,r:3}],
+   margeTOT:[{v:1.022,r:4},{v:1.0216,r:4},{v:1.0168,r:4},{v:1.0087,r:3}],
+   mvsDB:[1.3512,1.3092,1.2987,1.2607],mvsKD:[1.9542,1.9806,1.7524,1.8097],mvsTOT:[1.51,1.4831,1.4614,1.4746],
+   mDB:[604,614,613,590],mKD:[598,612,545,523],mTOT:[604,614,605,581],
+   poolDB:[8.97,10.16,11.71,12.51],poolKD:[3.37,3.29,4.59,4.66],
+   cDB:[104,185,233,220],cKD:[13,21,33,34],
+   m0DB:604,m0KD:598,m0TOT:604,
+   atot:`<strong>Barbara</strong> est 4ème sur 4 périodes consécutives — la régularité la plus solide de l'équipe. Son ratio TOTAL vs hors-suivi (×1.51) progresse régulièrement. Sa marge TOTAL (604€) dépasse le benchmark ALL "avec suivi" (591€).`,
+   adb:`Sur <strong>Dietbon</strong>, Barbara est 4ème (604€) avec un ratio vs hors-suivi (×1.35) en croissance régulière depuis 4 périodes. Son portefeuille DB a réduit (233 → 104 clients) — évolution à surveiller.`,
+   akd:`Sur <strong>KitchenDiet</strong>, Barbara est 4ème (598€) avec un ratio vs hors-suivi (×1.95) très solide. Ses clients KD génèrent presque le double de clients non suivis — c'est constant depuis 4 périodes.`,
+   verdict:"Pilier fiable de l'équipe sur la durée. La réduction du portefeuille DB (233 → 104 clients) mérite un point : est-ce un choix ou une contrainte ? Maintenir les deux ratios vs hors-suivi en croissance."},
+
+  {name:'Charlotte',ini:'CH',bg:'#FEF3C7',fg:'#92400E',ring:'#FDE68A',status:'ext',slabel:'Externe · ~10h/sem.',summary:'Dernière DB · top 2 KD constant · profil polarisé',
+   margeDB:[{v:.8345,r:9},{v:.798,r:9},{v:.793,r:9},{v:.8034,r:9}],
+   margeKD:[{v:1.2177,r:2},{v:1.2122,r:2},{v:1.4301,r:1},{v:1.4117,r:1}],
+   margeTOT:[{v:.9188,r:8},{v:.8702,r:9},{v:.9109,r:9},{v:.9323,r:6}],
+   mvsDB:[1.094,1.0277,1.0148,1.0043],mvsKD:[2.4673,2.2557,2.5016,2.5986],mvsTOT:[1.3575,1.2633,1.3092,1.3629],
+   mDB:[489,482,479,470],mKD:[755,697,778,751],mTOT:[543,523,542,537],
+   poolDB:[3.36,2.58,1.86,1.82],poolKD:[2.59,1.72,1.39,1.37],
+   cDB:[39,47,37,32],cKD:[10,11,10,10],
+   m0DB:489,m0KD:755,m0TOT:543,
+   atot:`<strong>Charlotte</strong> présente le profil le plus polarisé de l'équipe, stable depuis 4 périodes. Son TOTAL s'améliore légèrement (8ème vs 9ème) mais la réalité reste contrastée. Ses ratios vs hors-suivi racontent deux histoires opposées : ×1.09 sur DB (presque sans effet) vs ×2.47 sur KD (impact majeur).`,
+   adb:`Sur <strong>Dietbon</strong>, Charlotte est dernière (9ème) sur les 4 périodes. Son ratio DB vs hors-suivi (×1.09) est le plus bas de l'équipe — ses clients DB génèrent seulement 9% de plus que sans suivi. Sa marge (489€) progresse légèrement mais reste très éloignée du benchmark.`,
+   akd:`Sur <strong>KitchenDiet</strong>, Charlotte est 2ème (755€, ×2.47 vs hors-suivi) — ses clients KD génèrent 2.5x plus que sans suivi. C'est son meilleur résultat de la période et cette performance est constante sur 4 cohortes.`,
+   verdict:"La question centrale reste entière sur 4 périodes : ×2.47 sur KD vs ×1.09 sur DB chez la même diét. Formaliser les pratiques KD est une priorité collective. Objectif DB minimal : dépasser ×1.15 de ratio vs hors-suivi."},
+
+  {name:'Inès',ini:'IN',bg:'#EEF9D0',fg:'#3D5A12',ring:'#CAEA82',status:'int',slabel:'Interne · 27h/sem.',summary:'7ème TOTAL · chute KD notable oct–déc',
+   margeDB:[{v:1.0017,r:5},{v:.9868,r:6},{v:.9454,r:5},{v:.9846,r:5}],
+   margeKD:[{v:.6597,r:9},{v:.8904,r:6},{v:.9596,r:6},{v:.9474,r:4}],
+   margeTOT:[{v:.9543,r:7},{v:.9717,r:5},{v:.9479,r:5},{v:.9809,r:4}],
+   mvsDB:[1.3132,1.2708,1.2097,1.2308],mvsKD:[1.3366,1.6570,1.6785,1.7439],mvsTOT:[1.41,1.4106,1.3623,1.4340],
+   mDB:[587,596,571,576],mKD:[409,512,522,504],mTOT:[564,584,564,565],
+   poolDB:[11.22,10.27,8.19,7.85],poolKD:[4.92,4.86,3.62,3.43],
+   cDB:[130,187,163,138],cKD:[19,31,26,25],
+   m0DB:587,m0KD:409,m0TOT:564,
+   atot:`<strong>Inès</strong> recule à la 7ème place en TOTAL (564€). La chute KD est le signal le plus préoccupant de la période : de 6ème à 9ème, avec un ratio KD vs hors-suivi qui passe de ×1.66 à ×1.34. Son DB se stabilise juste au-dessus de la moyenne équipe.`,
+   adb:`Sur <strong>Dietbon</strong>, Inès se stabilise en 5ème position (587€, ×1.31 vs hors-suivi) — le ratio progresse légèrement. Elle gère 130 clients DB à 27h/sem., ratio clients/heure toujours élevé.`,
+   akd:`Sur <strong>KitchenDiet</strong>, Inès chute à la 9ème place (409€, ×1.34 vs hors-suivi) après 512€ en sept–nov. C'est le recul le plus marquant de la période dans l'équipe. Avec 19 clients KD, le signal est statistiquement significatif — ce n'est pas un accident de volume.`,
+   verdict:"Signal d'alerte KD à investiguer en priorité. La chute de ×1.67 à ×1.34 sur une cohorte mérite une analyse du groupe de clients concerné. Sur DB, maintenir le cap et envisager un allègement du volume si la contrainte temps persiste."},
+
+  {name:'Louise',ini:'LO',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'ext',slabel:'Externe · ~10h/sem.',summary:'2ème TOTAL · 1ère KD · meilleur ratio vs hors-suivi',
+   margeDB:[{v:1.1331,r:2},{v:1.0497,r:3},{v:1.0414,r:3},{v:1.0034,r:4}],
+   margeKD:[{v:1.3484,r:1},{v:1.2678,r:1},{v:1.1783,r:2},{v:.8233,r:7}],
+   margeTOT:[{v:1.1574,r:2},{v:1.0732,r:2},{v:1.0588,r:3},{v:.9774,r:5}],
+   mvsDB:[1.4855,1.3518,1.3326,1.2543],mvsKD:[2.732,2.3592,2.0611,1.5156],mvsTOT:[1.71,1.5580,1.5217,1.4289],
+   mDB:[664,634,629,587],mKD:[836,729,641,438],mTOT:[684,645,630,563],
+   poolDB:[3.36,3.57,3.37,2.56],poolKD:[1.30,1.41,1.39,1.23],
+   cDB:[39,65,67,45],cKD:[5,9,10,9],
+   m0DB:664,m0KD:836,m0TOT:684,
+   atot:`<strong>Louise</strong> est 2ème TOTAL (684€) avec le meilleur ratio TOTAL vs hors-suivi de l'équipe (×1.71). Sa progression sur 4 périodes est constante : de 5ème à 2ème. Ses clients génèrent 71% de plus que des clients non suivis.`,
+   adb:`Sur <strong>Dietbon</strong>, Louise est 2ème (664€, ×1.49 vs hors-suivi) — sa meilleure performance sur DB. Le ratio progresse régulièrement sur 4 périodes. Avec 39 clients DB, elle démontre qu'un portefeuille modéré peut générer des résultats top 3.`,
+   akd:`Sur <strong>KitchenDiet</strong>, Louise est 1ère pour la 2ème période consécutive (836€, ×2.73 vs hors-suivi) — le ratio le plus élevé de l'équipe. Depuis juil–sept (×1.52, 7ème), la progression est continue. Seulement 5 clients : à confirmer sur un volume plus large.`,
+   verdict:"Meilleure progression sur 4 périodes — de 5ème à 2ème. Les deux ratios vs hors-suivi sont en croissance constante, ce qui valide la qualité intrinsèque du suivi. Objectif : confirmer KD sur un volume significatif et viser le top 2 DB."},
+
+  {name:'Nathalie',ini:'NA',bg:'#FEE2E2',fg:'#991B1B',ring:'#FCA5A5',status:'ext',slabel:'Externe · ~10h/sem.',summary:'6ème TOTAL · remontée oct–déc · faible volume',
+   margeDB:[{v:.9863,r:6},{v:.8907,r:8},{v:.9222,r:8},{v:.9197,r:8}],
+   margeKD:[{v:.8823,r:7},{v:.9270,r:5},{v:1.0239,r:4},{v:.9398,r:5}],
+   margeTOT:[{v:.9662,r:6},{v:.8935,r:8},{v:.9361,r:6},{v:.9219,r:8}],
+   mvsDB:[1.2931,1.1471,1.1801,1.1496],mvsKD:[1.7876,1.7249,1.7910,1.7301],mvsTOT:[1.4275,1.2971,1.3454,1.3477],
+   mDB:[578,538,557,538],mKD:[547,533,557,500],mTOT:[571,537,557,531],
+   poolDB:[1.47,1.32,0.95,0.74],poolKD:[1.30,1.25,0.97,0.41],
+   cDB:[17,24,19,13],cKD:[5,8,7,3],
+   m0DB:578,m0KD:547,m0TOT:571,
+   atot:`<strong>Nathalie</strong> remonte à la 6ème place en TOTAL (571€) — une amélioration notable après 8ème la période précédente. Son ratio TOTAL vs hors-suivi (×1.43) progresse. Volumes toujours très faibles (17 DB / 5 KD) : toute conclusion reste fragile.`,
+   adb:`Sur <strong>Dietbon</strong>, Nathalie remonte à 578€ (6ème, ×1.29 vs hors-suivi) après 538€. Son ratio vs hors-suivi s'améliore mais reste sous la médiane équipe. 17 clients DB seulement.`,
+   akd:`Sur <strong>KitchenDiet</strong>, Nathalie est 7ème (547€, ×1.79 vs hors-suivi) — ratio solide, ses clients KD génèrent presque le double des non suivis. Signal positif mais 5 clients : non significatif statistiquement.`,
+   verdict:"Tendance positive sur la dernière période mais volumes trop faibles pour des conclusions solides. La priorité reste d'atteindre 40–50 clients DB pour obtenir des données fiables avant toute évaluation qualitative."},
+
+  {name:'Rose',ini:'RO',bg:'#EEF9D0',fg:'#3D5A12',ring:'#CAEA82',status:'ext',slabel:'Externe · ~10h/sem.',summary:'3ème TOTAL · recul DB · rebond KD',
+   margeDB:[{v:1.1195,r:3},{v:1.207,r:1},{v:1.2334,r:1},{v:1.0906,r:1}],
+   margeKD:[{v:.879,r:8},{v:.6974,r:9},{v:.7482,r:9},{v:.7951,r:8}],
+   margeTOT:[{v:1.0761,r:3},{v:1.1265,r:1},{v:1.1513,r:1},{v:1.0486,r:1}],
+   mvsDB:[1.4676,1.5544,1.5784,1.3632],mvsKD:[1.781,1.2977,1.3087,1.4637],mvsTOT:[1.59,1.6353,1.6546,1.533],
+   mDB:[656,729,745,638],mKD:[545,401,407,423],mTOT:[636,677,685,604],
+   poolDB:[2.42,2.91,2.56,2.79],poolKD:[1.55,1.57,1.53,1.23],
+   cDB:[28,53,51,49],cKD:[6,10,11,9],
+   m0DB:656,m0KD:545,m0TOT:636,
+   atot:`<strong>Rose</strong> recule à la 3ème place (636€) après 3 périodes à la 1ère. Son ratio TOTAL vs hors-suivi (×1.59) reste solide mais en recul vs le pic (×1.65). Le recul DB et la réduction du portefeuille expliquent en grande partie ce mouvement.`,
+   adb:`Sur <strong>Dietbon</strong>, Rose passe de 1ère à 3ème (656€, ×1.47 vs hors-suivi vs ×1.58 en sept–nov). Avec 28 clients DB (vs 53 précédemment), la baisse de volume peut expliquer une partie de la variation.`,
+   akd:`Sur <strong>KitchenDiet</strong>, Rose remonte à 8ème (545€, ×1.78 vs hors-suivi) — après un plancher à 401€ (×1.30). C'est le signe que le problème KD de Rose n'est peut-être pas structurel, mais lié à des cohortes spécifiques.`,
+   verdict:"Recul DB à surveiller. La baisse du portefeuille (53 → 28 clients) peut expliquer la variation. Le rebond KD est positif. Objectif : stabiliser DB au-dessus de 650€ avec un volume stable (~45 clients) et confirmer le rebond KD."},
+
+  {name:'Sophiane',ini:'SO',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'int',slabel:'Interne · 35h (50% management)',summary:'1ère TOTAL · 1ère DB · performance exceptionnelle oct–déc',
+   margeDB:[{v:1.273,r:1},{v:1.1093,r:2},{v:1.1126,r:2},{v:1.0479,r:2}],
+   margeKD:[{v:.9048,r:5},{v:.9670,r:4},{v:1.0478,r:3},{v:1.0338,r:2}],
+   margeTOT:[{v:1.2335,r:1},{v:1.0616,r:3},{v:1.0857,r:2},{v:1.0382,r:2}],
+   mvsDB:[1.6689,1.4286,1.4237,1.3098],mvsKD:[1.8333,1.7994,1.8328,1.9031],mvsTOT:[1.8225,1.5411,1.5604,1.5178],
+   mDB:[746,670,672,613],mKD:[561,556,570,550],mTOT:[729,638,646,598],
+   poolDB:[0.86,2.69,3.67,4.15],poolKD:[0.26,2.98,3.48,3.29],
+   cDB:[10,49,73,73],cKD:[1,19,25,24],
+   m0DB:746,m0KD:561,m0TOT:729,
+   atot:`<strong>Sophiane</strong> est 1ère TOTAL (729€, ×1.82 vs hors-suivi) — son meilleur résultat absolu. Ce pic s'explique en partie par un portefeuille DB très réduit (10 clients) qui concentre la performance sur un petit échantillon. La lecture la plus représentative reste sept–nov (2ème, 49 clients DB).`,
+   adb:`Sur <strong>Dietbon</strong>, Sophiane est 1ère (746€, ×1.67 vs hors-suivi) — le ratio le plus élevé de l'équipe sur cette marque. Seulement 10 clients DB ce trimestre : résultat exceptionnel mais non généralisable en l'état.`,
+   akd:`Sur <strong>KitchenDiet</strong>, Sophiane est 5ème (561€, ×1.83 vs hors-suivi). Son ratio KD est le plus stable de l'équipe sur 4 périodes — signal fiable d'un suivi KD de qualité constante malgré la charge managériale.`,
+   verdict:"Performance oct–déc à mettre en perspective (10 clients DB). Le signal fiable est la constance dans le top 3 depuis 4 périodes. Surveiller l'érosion du portefeuille DB : en dessous de 15 clients, les données perdent toute valeur statistique."},
+];
+
+function pct(v){const s=((v-1)*100).toFixed(1);return (v>=1?'+':'')+s+'%';}
+function rC(r){return 'r'+Math.min(r,9);}
+function bp(b){return b==='DB'?`<span class="pill p-db">DB</span>`:b==='KD'?`<span class="pill p-kd">KD</span>`:`<span class="pill p-tot">TOTAL</span>`;}
+function bbar(v,brand){
+  const a=v>=1,w=Math.min(Math.abs(v-1)*5*100,100).toFixed(0);
+  const cls=brand==='DB'?'bfdb':brand==='KD'?'bfkd':a?'bfg':'bfr';
+  return `<span class="bt"><span class="bf ${cls}" style="width:${w}%"></span></span>`;
+}
+function ev(cur,prev){
+  if(!prev) return '<span class="ev-eq">—</span>';
+  return cur>prev?'<span class="ev-up">↑</span>':'<span class="ev-dn">↓</span>';
+}
+// Tab registry: stores tabs arrays per uid
+const _tabReg={};
+function regTabs(uid,tabs){_tabReg[uid]=tabs;}
+function showTab(uid,idx){
+  const tabs=_tabReg[uid];
+  if(!tabs) return;
+  tabs.forEach((t,i)=>{
+    const el=document.getElementById(uid+'-'+t);
+    if(el) el.style.display=(i===idx)?'block':'none';
+  });
+  document.querySelectorAll('[data-stab-uid="'+uid+'"]').forEach(b=>{
+    b.classList.toggle('on', parseInt(b.dataset.stabIdx)===idx);
+  });
+}
+
+function mcInner(d, pi){
+  const rows=[
+    {k:'TOT',lbl:'TOTAL',val:d.mTOT[pi],col:'#9CA3AF',bg:'#F3F4F6',tc:'var(--color-text-primary)'},
+    {k:'DB', lbl:'DB',   val:d.mDB[pi],  col:'#5B0F9E',bg:'#EDE0FF',tc:'#5B0F9E'},
+    {k:'KD', lbl:'KD',   val:d.mKD[pi],  col:'#A8D94A',bg:'#EEF9D0',tc:'#5A7A1A'},
+  ];
+  let h=`<div class="mc-ttl">Marge par client · ${P[pi]}</div><div class="mc-rows">`;
+  rows.forEach((r,i)=>{
+    const ref=REF[r.k], range=ref.suivi-ref.sans, ratio=(r.val-ref.sans)/range;
+    const S=0.78, fp=Math.min(Math.max(ratio*S*100,0),100).toFixed(1), sp=(S*100).toFixed(1);
+    const d2=r.val-ref.suivi, ds=(d2>=0?'+':'')+d2+' €', dc=d2>=0?'up':'dn';
+    const bc=r.val>=ref.suivi?r.col:r.val>=ref.sans?'#D97706':'#C0392B';
+    h+=`<div class="mc-row">
+      <div class="mc-top">
+        <div class="mc-dot" style="background:${r.bg};border:2px solid ${r.col}"></div>
+        <span class="mc-brand" style="color:${r.tc}">${r.lbl}</span>
+        <span class="mc-v" style="color:${r.tc}">${r.val.toLocaleString('fr-FR')} €</span>
+        <span class="mc-d ${dc}">${ds} vs réf.</span>
+      </div>
+      <div class="mc-bs">
+        <div class="mc-bw"><div class="mc-bf" style="width:${fp}%;background:${bc}"></div><div class="mc-mk" style="left:${sp}%"></div></div>
+        <div class="mc-lg">
+          <div class="mc-li" style="align-items:flex-start"><span class="mc-ll">Sans suivi</span><span class="mc-lv">${ref.sans.toLocaleString('fr-FR')} €</span></div>
+          <div class="mc-li" style="align-items:flex-end"><span class="mc-ll">Avec suivi ▏</span><span class="mc-lv">${ref.suivi.toLocaleString('fr-FR')} €</span></div>
+        </div>
+      </div>
+    </div>`;
+    if(i<rows.length-1) h+=`<div class="mc-sep"></div>`;
+  });
+  h+=`</div><div class="mc-note">Le trait <strong>│</strong> = référence ALL "avec suivi". <span style="color:#5B0F9E;font-weight:600">■</span> au-dessus · <span style="color:#D97706;font-weight:600">■</span> entre les bornes · <span style="color:#C0392B;font-weight:600">■</span> sous sans-suivi.</div>`;
+  return h;
+}
+
+function rangInner(d, pi){
+  const rows=[
+    {lbl:'Rang TOTAL', r:d.margeTOT[pi].r, v:d.margeTOT[pi].v, dot:''},
+    {lbl:'Rang DB',    r:d.margeDB[pi].r,  v:d.margeDB[pi].v,  dot:'<span style="display:inline-block;width:8px;height:8px;background:#5B0F9E;border-radius:2px"></span>'},
+    {lbl:'Rang KD',    r:d.margeKD[pi].r,  v:d.margeKD[pi].v,  dot:'<span style="display:inline-block;width:8px;height:8px;background:#A8D94A;border-radius:2px"></span>'},
+  ];
+  return rows.map(row=>{
+    const col=row.r<=3?'c-g':row.r>=7?'c-r':'c-mu';
+    return `<div class="rang-row">
+      <div class="rang-lbl">${row.dot}${row.lbl}</div>
+      <div class="rang-val ${col}">${row.r}<em> /9</em></div>
+      <div class="rang-sub">${(row.v*100).toFixed(1)}% de la moyenne</div>
+    </div>`;
+  }).join('');
+}
+
+function switchPer(uid, pi){
+  const d = window._dietData[uid];
+  document.getElementById(uid+'-rang').innerHTML = rangInner(d, pi);
+  document.getElementById(uid+'-mc').innerHTML   = mcInner(d, pi);
+  document.querySelectorAll('#'+uid+'-per .per-btn').forEach((b,i)=>b.classList.toggle('on', i===pi));
+}
+
+if(!window._dietData) window._dietData = {};
+
+function exportPanel(uid){
+  const d=window._dietData[uid];
+  const styleEl=document.querySelector('style');
+  const css=styleEl?styleEl.innerHTML:'';
+  // Build the standalone panel HTML — analyse tab only, all periods available
+  const pi=0;
+  const dDB=d.m0DB-REF.DB.suivi, dKD=d.m0KD-REF.KD.suivi;
+  const rTOT=d.margeTOT[pi].r, rDB=d.margeDB[pi].r, rKD=d.margeKD[pi].r;
+
+  // Inline all helper functions and data needed
+  const script=`
+const P=${JSON.stringify(P)};
+const REF=${JSON.stringify(REF)};
+const d=${JSON.stringify(d)};
+if(!window._dietData) window._dietData={};
+window._dietData['${uid}']=d;
+function pct(v){const s=((v-1)*100).toFixed(1);return (v>=1?'+':'')+s+'%';}
+function rC(r){return 'r'+Math.min(r,9);}
+function bp(b){return b==='DB'?'<span class="pill p-db">DB</span>':b==='KD'?'<span class="pill p-kd">KD</span>':'<span class="pill p-tot">TOTAL</span>';}
+function bbar(v,brand){const a=v>=1,w=Math.min(Math.abs(v-1)*5*100,100).toFixed(0);const cls=brand==='DB'?'bfdb':brand==='KD'?'bfkd':a?'bfg':'bfr';return '<span class="bt"><span class="bf '+cls+'" style="width:'+w+'%"></span></span>';}
+function ev(cur,prev){if(!prev)return '<span class="ev-eq">—</span>';return cur>prev?'<span class="ev-up">↑</span>':'<span class="ev-dn">↓</span>';}
+const _tabReg={};function regTabs(uid,tabs){_tabReg[uid]=tabs;}function showTab(uid,idx){const tabs=_tabReg[uid];if(!tabs)return;tabs.forEach((t,i)=>{const el=document.getElementById(uid+"-"+t);if(el)el.style.display=(i===idx)?"block":"none";});document.querySelectorAll("[data-stab-uid=\""+uid+"\"]").forEach(b=>{b.classList.toggle("on",parseInt(b.dataset.stabIdx)===idx);});}
+function mcInner(d,pi){const rows=[{k:'TOT',lbl:'TOTAL',val:d.mTOT[pi],col:'#9CA3AF',bg:'#F3F4F6',tc:'var(--color-text-primary)'},{k:'DB',lbl:'DB',val:d.mDB[pi],col:'#5B0F9E',bg:'#EDE0FF',tc:'#5B0F9E'},{k:'KD',lbl:'KD',val:d.mKD[pi],col:'#A8D94A',bg:'#EEF9D0',tc:'#5A7A1A'}];let h='<div class="mc-ttl">Marge par client · '+P[pi]+'</div><div class="mc-rows">';rows.forEach((r,i)=>{const ref=REF[r.k],range=ref.suivi-ref.sans,ratio=(r.val-ref.sans)/range;const S=0.78,fp=Math.min(Math.max(ratio*S*100,0),100).toFixed(1),sp=(S*100).toFixed(1);const d2=r.val-ref.suivi,ds=(d2>=0?'+':'')+d2+' €',dc=d2>=0?'up':'dn';const bc=r.val>=ref.suivi?r.col:r.val>=ref.sans?'#D97706':'#C0392B';h+='<div class="mc-row"><div class="mc-top"><div class="mc-dot" style="background:'+r.bg+';border:2px solid '+r.col+'"></div><span class="mc-brand" style="color:'+r.tc+'">'+r.lbl+'</span><span class="mc-v" style="color:'+r.tc+'">'+r.val.toLocaleString("fr-FR")+' €</span><span class="mc-d '+dc+'">'+ds+' vs réf.</span></div><div class="mc-bs"><div class="mc-bw"><div class="mc-bf" style="width:'+fp+'%;background:'+bc+'"></div><div class="mc-mk" style="left:'+sp+'%"></div></div><div class="mc-lg"><div class="mc-li" style="align-items:flex-start"><span class="mc-ll">Sans suivi</span><span class="mc-lv">'+ref.sans.toLocaleString("fr-FR")+' €</span></div><div class="mc-li" style="align-items:flex-end"><span class="mc-ll">Avec suivi ▏</span><span class="mc-lv">'+ref.suivi.toLocaleString("fr-FR")+' €</span></div></div></div></div>';if(i<rows.length-1)h+='<div class="mc-sep"></div>';});h+='</div><div class="mc-note">Le trait <strong>│</strong> = référence ALL "avec suivi". <span style="color:#5B0F9E;font-weight:600">■</span> au-dessus · <span style="color:#D97706;font-weight:600">■</span> entre les bornes · <span style="color:#C0392B;font-weight:600">■</span> sous sans-suivi.</div>';return h;}
+function rangInner(d,pi){const rows=[{lbl:'Rang TOTAL',r:d.margeTOT[pi].r,v:d.margeTOT[pi].v,dot:''},{lbl:'Rang DB',r:d.margeDB[pi].r,v:d.margeDB[pi].v,dot:'<span style="display:inline-block;width:8px;height:8px;background:#5B0F9E;border-radius:2px"></span>'},{lbl:'Rang KD',r:d.margeKD[pi].r,v:d.margeKD[pi].v,dot:'<span style="display:inline-block;width:8px;height:8px;background:#A8D94A;border-radius:2px"></span>'}];return rows.map(row=>{const col=row.r<=3?'c-g':row.r>=7?'c-r':'c-mu';return '<div class="rang-row"><div class="rang-lbl">'+row.dot+row.lbl+'</div><div class="rang-val '+col+'">'+row.r+'<em> /9</em></div><div class="rang-sub">'+(row.v*100).toFixed(1)+'% de la moyenne</div></div>';}).join('');}
+function switchPer(uid,pi){const d=window._dietData[uid];document.getElementById(uid+'-rang').innerHTML=rangInner(d,pi);document.getElementById(uid+'-mc').innerHTML=mcInner(d,pi);document.querySelectorAll('#'+uid+'-per .per-btn').forEach((b,i)=>b.classList.toggle('on',i===pi));}
+`;
+
+  const bodyContent=document.getElementById('panel-${uid}').innerHTML;
+
+  const html=`<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fiche ${d.name}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+:root{
+  --color-text-primary:#111827;--color-text-secondary:#6B7280;
+  --color-background-primary:#ffffff;--color-background-secondary:#F9FAFB;
+  --color-border-tertiary:#E5E7EB;--color-border-secondary:#D1D5DB;
+}
+${css}
+.shell{padding:1.5rem;}
+</style>
+</head>
+<body>
+<div class="shell">
+<div class="panel on" id="panel-${uid}">${bodyContent}</div>
+</div>
+<script>
+${script}
+<\/script>
+</body>
+</html>`;
+
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='fiche-${d.name.toLowerCase()}.html';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function chartToggle(uid, mode){
+  ['marge','ratio','rang'].forEach(m=>{
+    const el=document.getElementById(uid+'-chart-'+m);
+    if(el) el.style.display=m===mode?'block':'none';
+  });
+  document.querySelectorAll('[data-ctab-uid="'+uid+'"]').forEach(b=>{
+    b.classList.toggle('on', b.dataset.ctabMode===mode);
+  });
+}
+
+function buildChart(d, mode, uid){
+  const W=560, H=200, PL=52, PR=16, PT=18, PB=38;
+  const cW=W-PL-PR, cH=H-PT-PB;
+  const n=P.length; // 4 periods, displayed oldest→newest (reversed)
+
+  // Data in chronological order (oldest first = index 3→0)
+  const idx=[3,2,1,0]; // juil-sept → oct-dec
+
+  let seriesDB, seriesKD, seriesTOT, yLabel, refLines;
+
+  if(mode==='marge'){
+    seriesDB  = idx.map(i=>d.mDB[i]);
+    seriesKD  = idx.map(i=>d.mKD[i]);
+    seriesTOT = idx.map(i=>d.mTOT[i]);
+    // reference lines: avec suivi per period (also reversed)
+    refLines=[
+      {y:[585,604,604,586].reverse().map((_,i)=>[585,604,604,586][idx[i]]), color:'#5B0F9E', label:'Réf. DB'},
+      {y:[532,544,575,620].reverse().map((_,i)=>[532,544,575,620][idx[i]]), color:'#5A7A1A', label:'Réf. KD'},
+    ];
+    yLabel='€';
+  } else if(mode==='ratio'){
+    seriesDB  = idx.map(i=>d.mvsDB[i]);
+    seriesKD  = idx.map(i=>d.mvsKD[i]);
+    seriesTOT = idx.map(i=>d.mvsTOT[i]);
+    refLines=[{y:[1,1,1,1], color:'#9CA3AF', label:'×1.0'}];
+    yLabel='×';
+  } else { // rang
+    seriesDB  = idx.map(i=>d.margeDB[i].r);
+    seriesKD  = idx.map(i=>d.margeKD[i].r);
+    seriesTOT = idx.map(i=>d.margeTOT[i].r);
+    refLines=[];
+    yLabel='rang';
+  }
+
+  const allVals=[...seriesDB,...seriesKD,...seriesTOT,...(refLines.flatMap(r=>r.y))];
+  let yMin=Math.min(...allVals), yMax=Math.max(...allVals);
+  if(mode==='rang'){ yMin=1; yMax=9; }
+  const pad=(yMax-yMin)*0.12||0.5;
+  yMin=Math.max(mode==='rang'?1:0, yMin-pad);
+  yMax=yMax+pad;
+
+  const toX=i=>(i/(n-1))*cW+PL;
+  const toY=v=>PT+cH-(((v-yMin)/(yMax-yMin))*cH);
+
+  function polyline(series, color, dashed=false, fill=false){
+    const pts=series.map((v,i)=>`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+    let out='';
+    if(fill){
+      const apts=`${toX(0).toFixed(1)},${(PT+cH).toFixed(1)} `+pts+` ${toX(n-1).toFixed(1)},${(PT+cH).toFixed(1)}`;
+      out+=`<polygon points="${apts}" fill="${color}" class="chart-area"/>`;
+    }
+    out+=`<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"${dashed?' stroke-dasharray="5,3"':''}/>`;
+    // dots
+    series.forEach((v,i)=>{
+      out+=`<circle cx="${toX(i).toFixed(1)}" cy="${toY(v).toFixed(1)}" r="4" fill="${color}" stroke="var(--color-background-primary)" stroke-width="2"/>`;
+      // value label
+      const lx=toX(i), ly=toY(v)-10;
+      const fmt=mode==='marge'?v.toLocaleString('fr-FR')+'€':mode==='ratio'?'×'+v.toFixed(2):v;
+      out+=`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="${color}" font-weight="600">${fmt}</text>`;
+    });
+    return out;
+  }
+
+  // Y axis labels
+  const yTicks=4;
+  let yAxisSvg='';
+  for(let t=0;t<=yTicks;t++){
+    const v=yMin+(yMax-yMin)*(t/yTicks);
+    const y=toY(v);
+    const fmt=mode==='marge'?Math.round(v)+'€':mode==='ratio'?'×'+v.toFixed(1):Math.round(v);
+    yAxisSvg+=`<text x="${PL-6}" y="${y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="9" font-family="var(--mono)" fill="var(--color-text-secondary)" opacity=".7">${fmt}</text>`;
+    yAxisSvg+=`<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W-PR}" y2="${y.toFixed(1)}" stroke="var(--color-border-tertiary)" stroke-width="1"/>`;
+  }
+
+  // X axis labels — chronological order oldest→newest
+  const labels=idx.map(i=>P[i]);
+  let xAxisSvg='';
+  labels.forEach((lbl,i)=>{
+    xAxisSvg+=`<text x="${toX(i).toFixed(1)}" y="${(PT+cH+16).toFixed(1)}" text-anchor="middle" font-size="9" font-family="var(--font)" fill="var(--color-text-secondary)">${lbl}</text>`;
+  });
+
+  // ref lines
+  let refSvg='';
+  refLines.forEach(r=>{
+    const pts=r.y.map((v,i)=>`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+    refSvg+=`<polyline points="${pts}" fill="none" stroke="${r.color}" stroke-width="1" stroke-dasharray="4,3" opacity=".4"/>`;
+  });
+
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    ${yAxisSvg}
+    ${refSvg}
+    ${polyline(seriesTOT,'#9CA3AF',true,false)}
+    ${polyline(seriesDB,'#5B0F9E',false,true)}
+    ${polyline(seriesKD,'#5A7A1A',false,true)}
+    ${xAxisSvg}
+    <line x1="${PL}" y1="${PT}" x2="${PL}" y2="${PT+cH}" stroke="var(--color-border-tertiary)" stroke-width="1"/>
+  </svg>`;
+}
+
+function buildPanel(d){
+  const uid=d.name.replace(/[^a-z]/gi,'');
+  const tabs=['analyse','classement','perf','courbes'];
+  const pi=0;
+  window._dietData[uid] = d;
+
+  const dDB=d.m0DB-REF.DB.suivi, dKD=d.m0KD-REF.KD.suivi;
+  const rTOT=d.margeTOT[pi].r, rDB=d.margeDB[pi].r, rKD=d.margeKD[pi].r;
+
+  let h=`<div class="hcard">
+    <div class="av" style="background:${d.bg};color:${d.fg};border-color:${d.ring}">${d.ini}</div>
+    <div class="hinfo">
+      <div class="hname">${d.name}</div>
+      <div class="hsub">${d.summary}</div>
+      <div><span class="bdg ${d.status==='int'?'bdg-int':'bdg-ext'}">${d.slabel}</span></div>
+    </div>
+    <button onclick="exportPanel('${uid}')" style="margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:7px 13px;border-radius:8px;border:1.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);color:var(--color-text-secondary);cursor:pointer;white-space:nowrap;transition:140ms ease" onmouseover="this.style.borderColor='var(--color-border-secondary)';this.style.color='var(--color-text-primary)'" onmouseout="this.style.borderColor='var(--color-border-tertiary)';this.style.color='var(--color-text-secondary)'">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 2v8m0 0L5 7m3 3 3-3M3 12h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Télécharger la fiche
+    </button>
+  </div>`;
+
+  h+=`<div class="kpi-grid">
+    <div class="per-card" id="${uid}-per">
+      <div class="per-ttl">Période</div>
+      ${P.map((p,i)=>`<button class="per-btn${i===0?' on':''}" onclick="switchPer('${uid}',${i})">${p}</button>`).join('')}
+    </div>
+    <div class="rang-card" id="${uid}-rang">${rangInner(d,pi)}</div>
+    <div class="mc" id="${uid}-mc">${mcInner(d,pi)}</div>
+  </div>`;
+
+  h+=`<div class="bleg">
+    <div class="bleg-item"><div class="bleg-dot" style="background:#5B0F9E"></div>Dietbon (DB)</div>
+    <div class="bleg-item"><div class="bleg-dot" style="background:#A8D94A"></div>KitchenDiet (KD)</div>
+  </div>`;
+
+  h+=`<div class="tab-bar">`;
+  ['Analyse','Classement','Perf. vs hors-suivi','Courbes'].forEach((l,i)=>{
+    const cls = i===0 ? 'tb tb-analyse' : 'tb';
+    h+=`<button class="${cls}${i===0?' on':''}" data-stab-uid="${uid}" data-stab-idx="${i}" onclick="showTab('${uid}',${i})">${l}</button>`;
+  });
+  h+=`</div>`;
+
+  // ── ANALYSE ──
+  h+=`<div id="${uid}-analyse" class="tab-c on" style="display:block"><div class="an-sec">
+    <div class="b-sec">
+      <div class="b-hd" style="background:#F3F4F6;color:#374151">
+        ${bp('TOTAL')}<span>Vue d'ensemble</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:12px">${d.m0TOT.toLocaleString('fr-FR')} € · rang ${rTOT}/9</span>
+      </div>
+      <div class="b-bd">${d.atot}</div>
+    </div>
+    <div class="b-sec">
+      <div class="b-hd" style="background:var(--db-l);color:var(--db)">
+        ${bp('DB')}<span>Dietbon</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:12px">${d.m0DB.toLocaleString('fr-FR')} € · rang ${rDB}/9 · <span class="${dDB>=0?'c-g':'c-r'}">${dDB>=0?'+':''}${dDB}€</span></span>
+      </div>
+      <div class="b-bd">${d.adb}</div>
+    </div>
+    <div class="b-sec">
+      <div class="b-hd" style="background:var(--kd-l);color:var(--kd-d)">
+        ${bp('KD')}<span>KitchenDiet</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:12px">${d.m0KD.toLocaleString('fr-FR')} € · rang ${rKD}/9 · <span class="${dKD>=0?'c-g':'c-r'}">${dKD>=0?'+':''}${dKD}€</span></span>
+      </div>
+      <div class="b-bd">${d.akd}</div>
+    </div>
+    <div class="verdict">
+      <div class="verdict-lbl">Verdict & recommandation</div>
+      <div class="verdict-txt">${d.verdict}</div>
+    </div>
+  </div></div>`;
+
+  // ── CLASSEMENT ──
+  h+=`<div id="${uid}-classement" class="tab-c" style="display:none">
+  <div class="tw"><table>
+    <thead><tr>
+      <th>Marque</th><th>Période</th><th>Marge vs moy.</th><th></th><th>Rang</th><th>Évolution</th>
+    </tr></thead>
+    <tbody>`;
+
+  // DB rows
+  d.margeDB.forEach((pt,i)=>{
+    const prev=i<2?d.margeDB[i+1]:null;
+    h+=`<tr class="rw-db">
+      <td>${bp('DB')}</td>
+      <td>${P[i]}</td>
+      <td class="c-db" style="font-family:var(--mono)">${(pt.v*100).toFixed(1)}%<small style="color:var(--color-text-secondary);margin-left:5px">(${pct(pt.v)})</small></td>
+      <td>${bbar(pt.v,'DB')}</td>
+      <td><span class="rk ${rC(pt.r)}">${pt.r}</span></td>
+      <td>${ev(pt.v,prev?.v)}</td>
+    </tr>`;
+  });
+
+  // KD rows
+  d.margeKD.forEach((pt,i)=>{
+    const prev=i<2?d.margeKD[i+1]:null;
+    h+=`<tr class="rw-kd">
+      <td>${bp('KD')}</td>
+      <td>${P[i]}</td>
+      <td class="c-kd" style="font-family:var(--mono)">${(pt.v*100).toFixed(1)}%<small style="color:var(--color-text-secondary);margin-left:5px">(${pct(pt.v)})</small></td>
+      <td>${bbar(pt.v,'KD')}</td>
+      <td><span class="rk ${rC(pt.r)}">${pt.r}</span></td>
+      <td>${ev(pt.v,prev?.v)}</td>
+    </tr>`;
+  });
+
+  // TOTAL rows
+  d.margeTOT.forEach((pt,i)=>{
+    const prev=i<2?d.margeTOT[i+1]:null;
+    const col=pt.v>=1?'c-g':'c-r';
+    h+=`<tr class="rw-tot">
+      <td>${bp('TOTAL')}</td>
+      <td>${P[i]}</td>
+      <td class="${col}" style="font-family:var(--mono)">${(pt.v*100).toFixed(1)}%<small style="color:var(--color-text-secondary);margin-left:5px">(${pct(pt.v)})</small></td>
+      <td>${bbar(pt.v,'TOTAL')}</td>
+      <td><span class="rk ${rC(pt.r)}">${pt.r}</span></td>
+      <td>${ev(pt.v,prev?.v)}</td>
+    </tr>`;
+  });
+
+  h+=`</tbody></table></div></div>`;
+
+  // ── PERF VS HORS-SUIVI ──
+  h+=`<div id="${uid}-perf" class="tab-c" style="display:none">`;
+
+  // DB table
+  h+=`<div class="ltv-sec">
+    <div class="ltv-hd">${bp('DB')}<span style="font-size:12px;font-weight:600;color:var(--db)">Dietbon — performance vs hors-suivi par cohorte</span></div>
+    <div class="tw"><table>
+      <thead><tr><th>Période</th><th>Clients</th><th>Pool %</th><th>Marge (€)</th><th>× vs hors-suivi</th><th>vs moy. équipe</th><th></th></tr></thead>
+      <tbody>`;
+  d.margeDB.forEach((pt,i)=>{
+    const mvs=d.mvsDB[i], pct_mvs=(((mvs-1)*100).toFixed(1));
+    const clMvs=mvs>=1.3?'c-g':mvs>=1.1?'c-a':'c-r';
+    h+=`<tr class="rw-db">
+      <td>${P[i]}</td><td>${d.cDB[i]}</td><td>${d.poolDB[i].toFixed(1)}%</td>
+      <td class="c-db" style="font-family:var(--mono);font-weight:600">${d.mDB[i].toLocaleString('fr-FR')} €</td>
+      <td class="${clMvs}" style="font-family:var(--mono);font-weight:600">×${mvs.toFixed(2)} <small style="font-weight:400;color:var(--color-text-secondary)">(+${pct_mvs}%)</small></td>
+      <td class="${pt.v>=1?'c-g':'c-r'}">${pct(pt.v)}</td>
+      <td>${bbar(pt.v,'DB')}</td>
+    </tr>`;
+  });
+  h+=`</tbody></table></div>
+  <div class="ref-bar">Lecture : <strong>×1.0</strong> = aucune valeur ajoutée vs non-suivi · <strong>×1.3+</strong> = suivi de qualité · <strong>×1.5+</strong> = haute performance</div>
+  </div>`;
+
+  // KD table
+  h+=`<div class="ltv-sec">
+    <div class="ltv-hd">${bp('KD')}<span style="font-size:12px;font-weight:600;color:var(--kd-d)">KitchenDiet — performance vs hors-suivi par cohorte</span></div>
+    <div class="tw"><table>
+      <thead><tr><th>Période</th><th>Clients</th><th>Pool %</th><th>Marge (€)</th><th>× vs hors-suivi</th><th>vs moy. équipe</th><th></th></tr></thead>
+      <tbody>`;
+  d.margeKD.forEach((pt,i)=>{
+    const mvs=d.mvsKD[i], pct_mvs=(((mvs-1)*100).toFixed(1));
+    const clMvs=mvs>=1.8?'c-g':mvs>=1.3?'c-a':'c-r';
+    h+=`<tr class="rw-kd">
+      <td>${P[i]}</td><td>${d.cKD[i]}</td><td>${d.poolKD[i].toFixed(1)}%</td>
+      <td class="c-kd" style="font-family:var(--mono);font-weight:600">${d.mKD[i].toLocaleString('fr-FR')} €</td>
+      <td class="${clMvs}" style="font-family:var(--mono);font-weight:600">×${mvs.toFixed(2)} <small style="font-weight:400;color:var(--color-text-secondary)">(+${pct_mvs}%)</small></td>
+      <td class="${pt.v>=1?'c-g':'c-r'}">${pct(pt.v)}</td>
+      <td>${bbar(pt.v,'KD')}</td>
+    </tr>`;
+  });
+  h+=`</tbody></table></div>
+  <div class="ref-bar"><strong>ALL Oct–Déc 25</strong> · <span style="color:#5B0F9E;font-weight:600">DB</span> avec suivi: 586€ · sans suivi: 447€ &nbsp;|&nbsp; <span style="color:#5A7A1A;font-weight:600">KD</span> avec suivi: 620€ · sans suivi: 306€</div>
+  </div>`;
+
+  h+=`</div>`;
+
+  // ── COURBES ──
+  h+=`<div id="${uid}-courbes" class="tab-c" style="display:none">
+  <div class="chart-wrap">
+    <div class="chart-ttl">
+      <span>Évolution de la marge par client · 4 périodes</span>
+      <div class="chart-leg">
+        <div class="chart-leg-item"><svg width="20" height="3"><line x1="0" y1="1.5" x2="20" y2="1.5" stroke="#5B0F9E" stroke-width="2.5"/></svg> DB</div>
+        <div class="chart-leg-item"><svg width="20" height="3"><line x1="0" y1="1.5" x2="20" y2="1.5" stroke="#5A7A1A" stroke-width="2.5"/></svg> KD</div>
+        <div class="chart-leg-item"><svg width="20" height="3"><line x1="0" y1="1.5" x2="20" y2="1.5" stroke="#9CA3AF" stroke-width="2" stroke-dasharray="4,2"/></svg> TOTAL</div>
+      </div>
+    </div>
+    <div class="chart-toggle">
+      <button class="ct-btn on" data-ctab-uid="${uid}" data-ctab-mode="marge" onclick="chartToggle('${uid}','marge')">Marge €</button>
+      <button class="ct-btn" data-ctab-uid="${uid}" data-ctab-mode="ratio" onclick="chartToggle('${uid}','ratio')">× vs hors-suivi</button>
+      <button class="ct-btn" data-ctab-uid="${uid}" data-ctab-mode="rang" onclick="chartToggle('${uid}','rang')">Rang /9</button>
+    </div>
+    <div id="${uid}-chart-marge">${buildChart(d,'marge',uid)}</div>
+    <div id="${uid}-chart-ratio" style="display:none">${buildChart(d,'ratio',uid)}</div>
+    <div id="${uid}-chart-rang" style="display:none">${buildChart(d,'rang',uid)}</div>
+  </div>
+  </div>`;
+
+  return h;
+}
+
+function buildAll(){
+  const d=allData, uid='ALL', tabs=['kpi','bases','lecture'];
+  let h=`<div class="all-bn"><div class="all-bn-t">∑ Référentiel ALL — Données sources</div>
+  <div class="all-bn-b">Performances <strong>globales de l'équipe Diet</strong> vs l'ensemble des clients. Sert de référentiel pour évaluer l'impact du suivi diét. <strong>Ne pas comparer directement aux fiches individuelles.</strong></div></div>
+  <div class="hcard">
+    <div class="av" style="background:#EDE0FF;color:#5B0F9E;border-color:#C9A8F5;font-size:22px">∑</div>
+    <div class="hinfo">
+      <div class="hname">ALL — Vue d'ensemble équipe</div>
+      <div class="hsub">Référence globale · tous clients suivis par les diéts</div>
+      <div><span class="bdg bdg-all">Référentiel global</span> <span class="bdg bdg-warn">Non comparable aux diéts individuelles</span></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
+    <div class="kpi-c"><div class="kpi-lbl">Impact marge suivi <span style="color:#5B0F9E">DB</span></div><div class="kpi-val c-db">+31%</div><div class="kpi-sub">586€ vs 447€ moyen ALL</div></div>
+    <div class="kpi-c"><div class="kpi-lbl">Impact marge suivi <span style="color:#5A7A1A">KD</span></div><div class="kpi-val c-kd">+103%</div><div class="kpi-sub">620€ vs 306€ moyen ALL</div></div>
+    <div class="kpi-c"><div class="kpi-lbl">Clients recrutés <span style="color:#5B0F9E">DB</span></div><div class="kpi-val c-db">1 159</div><div class="kpi-sub">Oct–Déc 25</div></div>
+    <div class="kpi-c"><div class="kpi-lbl">Clients recrutés <span style="color:#5A7A1A">KD</span></div><div class="kpi-val c-kd">386</div><div class="kpi-sub">Oct–Déc 25</div></div>
+  </div>
+  <div class="bleg">
+    <div class="bleg-item"><div class="bleg-dot" style="background:#5B0F9E"></div>Dietbon (DB)</div>
+    <div class="bleg-item"><div class="bleg-dot" style="background:#A8D94A"></div>KitchenDiet (KD)</div>
+  </div>`;
+
+  h+=`<div class="tab-bar">`;
+  ['KPI globaux','Données brutes','Comment lire'].forEach((l,i)=>{
+    h+=`<button class="tb${i===0?' on':''}" data-stab-uid="ALL" data-stab-idx="${i}" onclick="showTab('ALL',${i})">${l}</button>`;
+  });
+  h+=`</div>`;
+  regTabs('ALL',tabs);
+
+  h+=`<div id="ALL-kpi" class="tab-c on" style="display:block"><div class="tw"><table>
+    <thead><tr><th>Marque</th><th>Période</th><th>Marge Diet vs hors-suivi</th><th></th><th>Marge Diet vs moy. équipe</th><th></th></tr></thead><tbody>`;
+  ['DB','KD'].forEach(brand=>{
+    const ma=brand==='DB'?d.margeDB:d.margeKD;
+    const rc=brand==='DB'?'rw-db':'rw-kd';
+    ma.forEach((v,i)=>{
+      const prev=i<3?ma[i+1]:null;
+      const col=brand==='DB'?'c-db':'c-kd';
+      h+=`<tr class="${rc}"><td>${bp(brand)}</td><td>${P[i]}</td>
+        <td class="${col}" style="font-family:var(--mono)">×${v.toFixed(2)} <small style="opacity:.6">(+${((v-1)*100).toFixed(0)}%)</small></td>
+        <td>${bbar(v,brand)}</td>
+        <td class="${col}" style="font-family:var(--mono)">${brand==='DB'?((d.maSuDB[i]/d.maSnDB[i]-1)*100).toFixed(0):((d.maSuKD[i]/d.maSnKD[i]-1)*100).toFixed(0)}% <small style="opacity:.6">vs sans-suivi</small></td>
+        <td>${bbar(v,brand)}</td></tr>`;
+    });
+  });
+  h+=`</tbody></table></div></div>`;
+
+  h+=`<div id="ALL-bases" class="tab-c" style="display:none"><div class="tw"><table>
+    <thead><tr><th>Marque</th><th>Période</th><th>Recrutés</th><th>Marge avec suivi</th><th>Marge sans suivi</th><th>Écart (×)</th></tr></thead><tbody>`;
+  const ms={DB:d.maSuDB,KD:d.maSuKD};
+  const mss={DB:d.maSnDB,KD:d.maSnKD};
+  const cl={DB:d.totCDB,KD:d.totCKD};
+  ['DB','KD'].forEach(brand=>{
+    for(let i=0;i<4;i++){
+      const ratio=(ms[brand][i]/mss[brand][i]).toFixed(2);
+      h+=`<tr class="${brand==='DB'?'rw-db':'rw-kd'}"><td>${bp(brand)}</td><td>${P[i]}</td>
+        <td>${cl[brand][i].toLocaleString('fr-FR')}</td>
+        <td class="c-g" style="font-family:var(--mono)">${ms[brand][i].toLocaleString('fr-FR')} €</td>
+        <td class="c-r" style="font-family:var(--mono)">${mss[brand][i].toLocaleString('fr-FR')} €</td>
+        <td class="c-g" style="font-family:var(--mono);font-weight:600">×${ratio}</td></tr>`;
+    }
+  });
+  h+=`</tbody></table></div></div>`;
+
+  h+=`<div id="ALL-lecture" class="tab-c" style="display:none"><div class="an-sec">
+    <div class="ablk"><div class="ablk-t">Comment lire les données ALL</div>
+    <div class="ablk-b">Le référentiel ALL mesure l'<strong>impact réel du suivi diét sur la marge par client</strong>, en comparant les clients suivis aux clients non suivis (point fixe).<br><br>
+    Sur <strong style="color:#5B0F9E">Dietbon (DB)</strong> : clients suivis = 586€ de marge vs 447€ sans suivi (<strong>×1.31, +31%</strong>).<br><br>
+    Sur <strong style="color:#5A7A1A">KitchenDiet (KD)</strong> : clients suivis = 620€ vs 306€ sans suivi (<strong>×2.03, +103%</strong>).<br><br>
+    Le ratio individuel <em>Marge Diet Vs Marge hors suivi</em> indique combien de fois plus une diét génère par client vs des clients non suivis. C'est le <strong>point fixe</strong> qui permet de comparer les performances indépendamment de la taille du portefeuille.<br>
+    Le ratio <em>Marge Diet Vs Marge Diet moy</em> situe la diét <strong>dans le classement équipe</strong> — utile pour voir qui est au-dessus ou en dessous de la moyenne collective.</div></div>
+    <div class="ablk"><div class="ablk-t">Grille de lecture · ratio <em>Marge Diet Vs Marge hors suivi</em> sur <span style="color:#5B0F9E">DB</span></div>
+    <div class="ablk-b"><div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+      ${[['< ×1.05','Pratiquement sans effet — suivi ne génère pas de valeur ajoutée visible','c-r'],['×1.05–×1.15','Effet faible — sous la médiane équipe DB','c-a'],['×1.15–×1.30','Effet modéré — dans la moyenne équipe','c-mu'],['×1.30–×1.50','Bon suivi — au-dessus de la moyenne équipe DB','c-g'],['×1.50+','Haute performance — le suivi a un impact fort et mesurable','c-g']].map(([v,l,c])=>`<div class="sr"><span class="sv ${c}">${v}</span><span class="sl">${l}</span></div>`).join('')}
+    </div></div></div>
+  </div></div>`;
+
+  return h;
+}
+
+function buildGlobalClassements(){
+  let h='<div class="hcard"><div class="av" style="background:#E6F1FB;color:#185FA5;border-color:#93C5FD;font-size:13px;font-weight:700">CL</div><div class="hinfo"><div class="hname">Classements globaux</div><div class="hsub">Marge vs moyenne équipe · toutes diéts · 3 périodes</div><div><span class="bdg bdg-all">Vue comparative</span></div></div></div><div class="an-sec">';
+  ['DB','KD','TOTAL'].forEach(brand=>{
+    const bBg=brand==='DB'?'var(--db-l)':brand==='KD'?'var(--kd-l)':'#F3F4F6';
+    const bCol=brand==='DB'?'var(--db)':brand==='KD'?'var(--kd-d)':'#374151';
+    const rwC=brand==='DB'?'rw-db':brand==='KD'?'rw-kd':'rw-tot';
+    function getV(d,pi){ return brand==='DB'?d.margeDB[pi].v:brand==='KD'?d.margeKD[pi].v:d.margeTOT[pi].v; }
+    const rankMaps=P.map((_,pi)=>{
+      const sorted=[...diets].sort((a,b)=>getV(b,pi)-getV(a,pi));
+      const m={};sorted.forEach((d,idx)=>{m[d.name]={r:idx+1,v:getV(d,pi)};});return m;
+    });
+    const sortedDiets=[...diets].sort((a,b)=>rankMaps[0][a.name].r-rankMaps[0][b.name].r);
+    h+=`<div style="margin-bottom:20px"><div class="b-hd" style="background:${bBg};color:${bCol};border-radius:var(--r-lg) var(--r-lg) 0 0;border:1px solid var(--color-border-tertiary)">${bp(brand)}<span>${brand==='DB'?'Dietbon':brand==='KD'?'KitchenDiet':'TOTAL'} — classement marge vs moyenne</span></div>
+    <div class="tw" style="border:1px solid var(--color-border-tertiary);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);overflow:hidden"><table>
+    <thead><tr><th>Diét</th>${P.map(p=>`<th colspan="2">${p}</th>`).join('')}</tr></thead><tbody>`;
+    sortedDiets.forEach(d=>{
+      h+=`<tr class="${rwC}"><td><div style="display:flex;align-items:center;gap:6px"><div style="width:26px;height:26px;border-radius:50%;background:${d.bg};color:${d.fg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${d.ini}</div><span style="font-size:12.5px;font-weight:500">${d.name}</span></div></td>`;
+      P.forEach((_,pi)=>{
+        const info=rankMaps[pi][d.name];
+        h+=`<td><span class="rk ${rC(info.r)}">${info.r}</span></td><td class="${info.v>=1?'c-g':'c-r'}" style="font-family:var(--mono);font-size:12px">${(info.v*100).toFixed(1)}%<small style="color:var(--color-text-secondary);margin-left:3px">${pct(info.v)}</small></td>`;
+      });
+      h+=`</tr>`;
+    });
+    h+=`</tbody></table></div></div>`;
+  });
+  return h+'</div>';
+}
+
+function buildGlobalLTV(){
+  let h='<div class="hcard"><div class="av" style="background:#E1F5EE;color:#0F6E56;border-color:#6EE7B7;font-size:11px;font-weight:700">×</div><div class="hinfo"><div class="hname">Perf. vs hors-suivi — Vue globale</div><div class="hsub">Ratio Marge Diet / Marge hors-suivi · oct–déc 25 · DB & KD</div><div><span class="bdg" style="background:#E1F5EE;color:#0F6E56;border:1px solid #6EE7B7">Point fixe indépendant des périodes</span></div></div></div><div class="an-sec">';
+  ['DB','KD'].forEach(brand=>{
+    const isDB=brand==='DB';
+    const bBg=isDB?'var(--db-l)':'var(--kd-l)', bCol=isDB?'var(--db)':'var(--kd-d)';
+    const rwC=isDB?'rw-db':'rw-kd', cC=isDB?'c-db':'c-kd';
+    const refS=isDB?REF.DB.suivi:REF.KD.suivi, refN=isDB?REF.DB.sans:REF.KD.sans;
+    const sorted=[...diets].sort((a,b)=>(isDB?b.mvsDB[0]:b.mvsKD[0])-(isDB?a.mvsDB[0]:a.mvsKD[0]));
+    h+=`<div style="margin-bottom:20px"><div class="b-hd" style="background:${bBg};color:${bCol};border-radius:var(--r-lg) var(--r-lg) 0 0;border:1px solid var(--color-border-tertiary)">${bp(brand)}<span>${isDB?'Dietbon':'KitchenDiet'} — ratio vs hors-suivi · oct–déc 25</span><span style="margin-left:auto;font-size:11px;font-family:var(--mono)">Réf. avec suivi: ${refS}€ · sans: ${refN}€</span></div>
+    <div class="tw" style="border:1px solid var(--color-border-tertiary);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);overflow:hidden"><table>
+    <thead><tr><th>Diét</th><th>Statut</th><th>Clients</th><th>Pool%</th><th>Marge (€)</th><th>× vs hors-suivi</th><th>vs moy. équipe</th><th></th></tr></thead><tbody>`;
+    sorted.forEach((d,idx)=>{
+      const mvs=isDB?d.mvsDB[0]:d.mvsKD[0];
+      const m=isDB?d.m0DB:d.m0KD;
+      const pool=isDB?d.poolDB[0]:d.poolKD[0], cl=isDB?d.cDB[0]:d.cKD[0];
+      const vsEq=isDB?d.margeDB[0].v:d.margeKD[0].v;
+      const rk=isDB?d.margeDB[0].r:d.margeKD[0].r;
+      const clMvs=mvs>=(isDB?1.3:1.8)?'c-g':mvs>=(isDB?1.1:1.3)?'c-a':'c-r';
+      h+=`<tr class="${rwC}"><td><div style="display:flex;align-items:center;gap:6px"><span class="rk ${rC(rk)}" style="width:22px;height:22px;font-size:10px">${rk}</span><div style="width:24px;height:24px;border-radius:50%;background:${d.bg};color:${d.fg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">${d.ini}</div><span style="font-size:12.5px;font-weight:500">${d.name}</span></div></td>
+      <td><span class="bdg ${d.status==='int'?'bdg-int':'bdg-ext'}" style="font-size:10px">${d.status==='int'?'Int.':'Ext.'}</span></td>
+      <td style="font-family:var(--mono)">${cl}</td><td style="font-family:var(--mono)">${pool.toFixed(1)}%</td>
+      <td class="${cC}" style="font-family:var(--mono);font-weight:600">${m.toLocaleString('fr-FR')} €</td>
+      <td class="${clMvs}" style="font-family:var(--mono);font-weight:700">×${mvs.toFixed(2)}</td>
+      <td class="${vsEq>=1?'c-g':'c-r'}">${pct(vsEq)}</td>
+      <td>${bbar(vsEq,brand)}</td></tr>`;
+    });
+    h+=`</tbody></table></div><div class="ref-bar"><strong>ALL ${brand} oct–déc 25</strong> · avec suivi: <strong>${refS}€</strong> · sans suivi: <strong>${refN}€</strong></div></div>`;
+  });
+  // TOTAL
+  const sortedTot=[...diets].sort((a,b)=>b.mvsTOT[0]-a.mvsTOT[0]);
+  h+=`<div style="margin-bottom:20px"><div class="b-hd" style="background:#F3F4F6;color:#374151;border-radius:var(--r-lg) var(--r-lg) 0 0;border:1px solid var(--color-border-tertiary)">${bp('TOTAL')}<span>Vue TOTAL — Ratio vs hors-suivi combiné (oct–déc 25)</span></div>
+  <div class="tw" style="border:1px solid var(--color-border-tertiary);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);overflow:hidden"><table>
+  <thead><tr><th>Diét</th><th>Statut</th><th>Clients tot.</th><th>Marge TOTAL (€)</th><th>× vs hors-suivi</th><th>vs moy. équipe</th><th></th></tr></thead><tbody>`;
+  sortedTot.forEach(d=>{
+    const mvs=d.mvsTOT[0];
+    const clMvs=mvs>=1.5?'c-g':mvs>=1.3?'c-a':'c-r';
+    h+=`<tr class="rw-tot"><td><div style="display:flex;align-items:center;gap:6px"><span class="rk ${rC(d.margeTOT[0].r)}" style="width:22px;height:22px;font-size:10px">${d.margeTOT[0].r}</span><div style="width:24px;height:24px;border-radius:50%;background:${d.bg};color:${d.fg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">${d.ini}</div><span style="font-size:12.5px;font-weight:500">${d.name}</span></div></td>
+    <td><span class="bdg ${d.status==='int'?'bdg-int':'bdg-ext'}" style="font-size:10px">${d.status==='int'?'Int.':'Ext.'}</span></td>
+    <td style="font-family:var(--mono)">${d.cDB[0]+d.cKD[0]}</td>
+    <td style="font-family:var(--mono);font-weight:600">${d.m0TOT.toLocaleString('fr-FR')} €</td>
+    <td class="${clMvs}" style="font-family:var(--mono);font-weight:700">×${mvs.toFixed(2)}</td>
+    <td class="${d.margeTOT[0].v>=1?'c-g':'c-r'}">${pct(d.margeTOT[0].v)}</td>
+    <td>${bbar(d.margeTOT[0].v,'TOTAL')}</td></tr>`;
+  });
+  h+=`</tbody></table></div></div>`;
+  return h+'</div>';
+}
+
+const nav=document.getElementById('nav'), panels=document.getElementById('panels');
+
+const _navItems=[];
+function activateNav(pid){
+  _navItems.forEach(x=>x.btn.classList.toggle('on', x.pid===pid));
+  document.querySelectorAll('#panels>.panel').forEach(p=>p.classList.toggle('on', p.id===pid));
+}
+function addNav(btn, pid, html){
+  _navItems.push({btn,pid});
+  btn.onclick=()=>activateNav(pid);
+  nav.appendChild(btn);
+  const p=document.createElement('div'); p.className='panel'; p.id=pid; p.innerHTML=html;
+  panels.appendChild(p);
+}
+
+// ── ALL ──
+const allBtn=document.createElement('button');
+allBtn.className='nb all-nb'; allBtn.textContent='ALL ∑';
+addNav(allBtn,'panel-ALL',buildAll());
+
+// ── CLASSEMENTS ──
+const clBtn=document.createElement('button');
+clBtn.className='nb nb-cl'; clBtn.textContent='Classements';
+addNav(clBtn,'panel-CL',buildGlobalClassements());
+
+// ── PERF ──
+const ltvBtn=document.createElement('button');
+ltvBtn.className='nb nb-ltv'; ltvBtn.textContent='Perf. × hors-suivi';
+addNav(ltvBtn,'panel-LTV',buildGlobalLTV());
+
+// ── DIETS ──
+diets.forEach((d,i)=>{
+  const uid=d.name.replace(/[^a-z]/gi,'');
+  const btn=document.createElement('button');
+  btn.className='nb';
+  btn.innerHTML=`${d.name} <span style="font-size:10px;opacity:.55;margin-left:2px">${d.status}</span>`;
+  addNav(btn,`panel-${uid}`,buildPanel(d));
+});
+
+// Register tab arrays for each diet panel
+diets.forEach(d=>{
+  const uid=d.name.replace(/[^a-z]/gi,'');
+  regTabs(uid,['analyse','classement','perf','courbes']);
+});
+
+activateNav('panel-ALL');
+</script>
