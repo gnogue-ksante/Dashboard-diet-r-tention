@@ -1,4 +1,3 @@
-
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -170,6 +169,12 @@ tr:hover td { background:var(--color-background-secondary) !important; }
 .sl { font-size:12px; color:var(--color-text-secondary); }
 </style>
 
+<div id="loading-overlay" style="position:fixed;inset:0;background:var(--color-background-primary,#fff);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:'DM Sans',sans-serif;">
+  <div style="width:40px;height:40px;border:3px solid #EDE0FF;border-top-color:#5B0F9E;border-radius:50%;animation:spin .8s linear infinite"></div>
+  <div style="font-size:14px;color:#6B7280;">Chargement des données depuis Google Sheets…</div>
+  <div id="load-status" style="font-size:11px;color:#9CA3AF;font-family:monospace"></div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 <div class="shell">
   <div class="nav-strip" id="nav"></div>
   <div id="panels"></div>
@@ -940,35 +945,250 @@ function addNav(btn, pid, html){
   panels.appendChild(p);
 }
 
-// ── ALL ──
-const allBtn=document.createElement('button');
-allBtn.className='nb all-nb'; allBtn.textContent='ALL ∑';
-addNav(allBtn,'panel-ALL',buildAll());
+// ══════════════════════════════════════════════
+// STATIC CONFIG — couleurs, labels, textes analyse
+// (ne change pas selon les données)
+// ══════════════════════════════════════════════
+const DIET_META = {
+  'Amanda':   {ini:'AM',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Axelle':   {ini:'AX',bg:'#EEF9D0',fg:'#3D5A12',ring:'#CAEA82',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Barbara':  {ini:'BA',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'int',slabel:'Interne · 35h/sem.'},
+  'Charlotte':{ini:'CH',bg:'#FEF3C7',fg:'#92400E',ring:'#FDE68A',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Inès':     {ini:'IN',bg:'#EEF9D0',fg:'#3D5A12',ring:'#CAEA82',status:'int',slabel:'Interne · 27h/sem.'},
+  'Louise':   {ini:'LO',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Nathalie': {ini:'NA',bg:'#FEE2E2',fg:'#991B1B',ring:'#FCA5A5',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Rose':     {ini:'RO',bg:'#EEF9D0',fg:'#3D5A12',ring:'#CAEA82',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Sophiane': {ini:'SO',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'int',slabel:'Interne · 35h (50% management)'},
+};
 
-// ── CLASSEMENTS ──
-const clBtn=document.createElement('button');
-clBtn.className='nb nb-cl'; clBtn.textContent='Classements';
-addNav(clBtn,'panel-CL',buildGlobalClassements());
+// ══════════════════════════════════════════════
+// FETCH GOOGLE SHEETS DATA
+// ══════════════════════════════════════════════
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4eCRAm19OUMMQNeYaw4cOSjNhEhADmrgDKX6FpdKhHpJfW-GdsdiSezVwa48yzK2rMw/exec';
 
-// ── PERF ──
-const ltvBtn=document.createElement('button');
-ltvBtn.className='nb nb-ltv'; ltvBtn.textContent='Perf. × hors-suivi';
-addNav(ltvBtn,'panel-LTV',buildGlobalLTV());
+function setStatus(msg) {
+  const el = document.getElementById('load-status');
+  if(el) el.textContent = msg;
+}
 
-// ── DIETS ──
-diets.forEach((d,i)=>{
-  const uid=d.name.replace(/[^a-z]/gi,'');
-  const btn=document.createElement('button');
-  btn.className='nb';
-  btn.innerHTML=`${d.name} <span style="font-size:10px;opacity:.55;margin-left:2px">${d.status}</span>`;
-  addNav(btn,`panel-${uid}`,buildPanel(d));
-});
+function hideLoading() {
+  const el = document.getElementById('loading-overlay');
+  if(el) el.style.display = 'none';
+}
 
-// Register tab arrays for each diet panel
-diets.forEach(d=>{
-  const uid=d.name.replace(/[^a-z]/gi,'');
-  regTabs(uid,['analyse','classement','perf','courbes']);
-});
+function showError(msg) {
+  const el = document.getElementById('loading-overlay');
+  if(el) el.innerHTML = `<div style="text-align:center;padding:40px;font-family:'DM Sans',sans-serif">
+    <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+    <div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:8px">Impossible de charger les données</div>
+    <div style="font-size:13px;color:#6B7280;max-width:400px">${msg}</div>
+    <button onclick="location.reload()" style="margin-top:20px;padding:8px 20px;border-radius:8px;border:1.5px solid #5B0F9E;background:#EDE0FF;color:#5B0F9E;font-weight:600;cursor:pointer">Réessayer</button>
+  </div>`;
+}
 
-activateNav('panel-ALL');
+// Parse the raw 2D array from Apps Script into structured data
+function parseSheetData(rows) {
+  setStatus('Parsing des données…');
+
+  // Find header row (contains period labels like "10/25 à 12/25")
+  let headerRow = -1;
+  let periods = [];
+  for(let i=0; i<rows.length; i++) {
+    const row = rows[i];
+    if(row[1] === 'Catégorie' && row[2] === 'Diet') {
+      headerRow = i;
+      // Extract period columns (cols 4+)
+      for(let c=4; c<row.length; c++) {
+        if(row[c]) periods.push({col:c, label:String(row[c]).trim()});
+      }
+      break;
+    }
+  }
+
+  if(headerRow === -1) throw new Error('Structure du sheet non reconnue — vérifier que l\'onglet s\'appelle "LTV&Marges"');
+
+  // Format period labels nicely
+  function fmtPeriod(raw) {
+    // "10/25 à 12/25" → "Oct–Déc 25"
+    const months = ['','Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    const m = String(raw).match(/(\d+)\/(\d+) à (\d+)\/(\d+)/);
+    if(!m) return raw;
+    return months[parseInt(m[1])] + '–' + months[parseInt(m[3])] + ' ' + (2000+parseInt(m[2]));
+  }
+
+  const periodLabels = periods.map(p => fmtPeriod(p.label));
+
+  // Build lookup: {marque+catégorie+diet → [values per period]}
+  const lookup = {};
+  for(let i=headerRow+1; i<rows.length; i++) {
+    const row = rows[i];
+    const marque = String(row[0]||'').trim();
+    const cat    = String(row[1]||'').trim();
+    const diet   = String(row[2]||'').trim();
+    if(!marque || !cat) continue;
+    const key = marque+'|'+cat+'|'+diet;
+    lookup[key] = periods.map(p => parseFloat(row[p.col])||0);
+  }
+
+  function get(marque, cat, diet) {
+    return lookup[marque+'|'+cat+'|'+(diet||'all')] || periods.map(()=>0);
+  }
+
+  // ── Build allData ──
+  const newAllData = {
+    margeDB: get('DB','Marge Diet Vs SANS diet','all'),
+    margeKD: get('KD','LTV Diet Vs SANS diet','all'), // ratio KD
+    totCDB:  get('DB','Clients recrutés','all'),
+    totCKD:  get('KD','Clients recrutés','all'),
+    maSuDB:  get('DB','Marge Avec suivi','all'),
+    maSuKD:  get('KD','Marge Avec suivi','all'),
+    maSnDB:  get('DB','Marge Sans suivi','all'),
+    maSnKD:  get('KD','Marge Sans suivi','all'),
+  };
+
+  // ── Build REF from most recent period (index 0) ──
+  const newREF = {
+    DB: { sans: newAllData.maSnDB[0]||447, suivi: newAllData.maSuDB[0]||586 },
+    KD: { sans: newAllData.maSnKD[0]||306, suivi: newAllData.maSuKD[0]||620 },
+    TOT:{ sans: 400, suivi: 591 }
+  };
+
+  // ── Build diets array ──
+  const dietNames = Object.keys(DIET_META);
+  const newDiets = [];
+
+  // Moy equipe per period per marque
+  const moyDB  = periods.map((_,pi) => newAllData.maSuDB[pi]||586);
+  const moyKD  = periods.map((_,pi) => newAllData.maSuKD[pi]||620);
+  const moyTOT = periods.map((_,pi) => ((newAllData.maSuDB[pi]||586)+(newAllData.maSuKD[pi]||620))/2);
+
+  for(const name of dietNames) {
+    const meta = DIET_META[name];
+    const mDB  = get('DB','Marge',name);
+    const mKD  = get('KD','Marge',name);
+    const mvsDB  = get('DB','Marge Diet Vs Marge hors suivi',name);
+    const mvsKD  = get('KD','Marge Diet Vs Marge hors suivi',name);
+    const mvsTOT = get('TOTAL','Marge Diet Vs Marge hors suivi',name);
+    const poolDB = get('DB','Pool',name).map(v=>parseFloat((v*100).toFixed(2)));
+    const poolKD = get('KD','Pool',name).map(v=>parseFloat((v*100).toFixed(2)));
+    const cDB    = get('DB','Clients recrutés',name);
+    const cKD    = get('KD','Clients recrutés',name);
+    const mTOT   = get('TOTAL','Marge',name);
+
+    // Compute ratios vs moy equipe
+    const ratioMoyDB  = periods.map((_,pi) => moyDB[pi]  ? parseFloat((mDB[pi]/moyDB[pi]).toFixed(4))  : 0);
+    const ratioMoyKD  = periods.map((_,pi) => moyKD[pi]  ? parseFloat((mKD[pi]/moyKD[pi]).toFixed(4))  : 0);
+    const ratioMoyTOT = periods.map((_,pi) => moyTOT[pi] ? parseFloat((mTOT[pi]/moyTOT[pi]).toFixed(4)): 0);
+
+    // Compute ranks (will be set after all diets computed)
+    const margeDBobj  = ratioMoyDB.map(v=>  ({v,r:0}));
+    const margeKDobj  = ratioMoyKD.map(v=>  ({v,r:0}));
+    const margeTOTobj = ratioMoyTOT.map(v=> ({v,r:0}));
+
+    newDiets.push({
+      name, ...meta,
+      summary: `Données live · ${periodLabels[0]}`,
+      margeDB: margeDBobj, margeKD: margeKDobj, margeTOT: margeTOTobj,
+      mvsDB, mvsKD, mvsTOT,
+      mDB, mKD, mTOT,
+      poolDB, poolKD, cDB, cKD,
+      m0DB: mDB[0]||0, m0KD: mKD[0]||0, m0TOT: mTOT[0]||0,
+      atot: `<strong>${name}</strong> — données chargées depuis Google Sheets. Marge TOTAL : <strong>${(mTOT[0]||0).toLocaleString('fr-FR')} €</strong> sur la période ${periodLabels[0]}.`,
+      adb:  `Sur <strong>Dietbon</strong>, ${name} génère <strong>${(mDB[0]||0).toLocaleString('fr-FR')} €</strong> de marge par client (×${(mvsDB[0]||0).toFixed(2)} vs hors-suivi).`,
+      akd:  `Sur <strong>KitchenDiet</strong>, ${name} génère <strong>${(mKD[0]||0).toLocaleString('fr-FR')} €</strong> de marge par client (×${(mvsKD[0]||0).toFixed(2)} vs hors-suivi).`,
+      verdict: `Données mises à jour automatiquement depuis Google Sheets.`
+    });
+  }
+
+  // ── Compute ranks per period ──
+  for(let pi=0; pi<periods.length; pi++) {
+    const sortedDB  = [...newDiets].sort((a,b)=>b.mDB[pi]-a.mDB[pi]);
+    const sortedKD  = [...newDiets].sort((a,b)=>b.mKD[pi]-a.mKD[pi]);
+    const sortedTOT = [...newDiets].sort((a,b)=>b.mTOT[pi]-a.mTOT[pi]);
+    sortedDB.forEach((d,i)=>  { const dd=newDiets.find(x=>x.name===d.name); dd.margeDB[pi].r=i+1; });
+    sortedKD.forEach((d,i)=>  { const dd=newDiets.find(x=>x.name===d.name); dd.margeKD[pi].r=i+1; });
+    sortedTOT.forEach((d,i)=> { const dd=newDiets.find(x=>x.name===d.name); dd.margeTOT[pi].r=i+1; });
+  }
+
+  return { newAllData, newREF, newDiets, periodLabels };
+}
+
+function buildDashboard({ newAllData, newREF, newDiets, periodLabels }) {
+  setStatus('Construction du dashboard…');
+
+  // Override global variables
+  P.length=0; periodLabels.forEach(l=>P.push(l));
+  Object.assign(REF, newREF);
+  Object.assign(allData, newAllData);
+  diets.length=0; newDiets.forEach(d=>diets.push(d));
+
+  // Clear nav and panels
+  document.getElementById('nav').innerHTML='';
+  document.getElementById('panels').innerHTML='';
+  _navItems.length=0;
+
+  // Rebuild
+  const allBtn=document.createElement('button');
+  allBtn.className='nb all-nb'; allBtn.textContent='ALL ∑';
+  addNav(allBtn,'panel-ALL',buildAll());
+
+  const clBtn=document.createElement('button');
+  clBtn.className='nb nb-cl'; clBtn.textContent='Classements';
+  addNav(clBtn,'panel-CL',buildGlobalClassements());
+
+  const ltvBtn=document.createElement('button');
+  ltvBtn.className='nb nb-ltv'; ltvBtn.textContent='Perf. × hors-suivi';
+  addNav(ltvBtn,'panel-LTV',buildGlobalLTV());
+
+  diets.forEach(d=>{
+    const uid=d.name.replace(/[^a-z]/gi,'');
+    const btn=document.createElement('button');
+    btn.className='nb';
+    btn.innerHTML=`${d.name} <span style="font-size:10px;opacity:.55;margin-left:2px">${d.status}</span>`;
+    addNav(btn,`panel-${uid}`,buildPanel(d));
+  });
+
+  diets.forEach(d=>{
+    const uid=d.name.replace(/[^a-z]/gi,'');
+    regTabs(uid,['analyse','classement','perf','courbes']);
+  });
+  regTabs('ALL',['kpi','bases','lecture']);
+
+  activateNav('panel-ALL');
+
+  // Add last updated badge in nav
+  const now = new Date();
+  const badge = document.createElement('span');
+  badge.style.cssText='font-size:10px;color:var(--color-text-secondary);padding:5px 10px;align-self:center;margin-left:auto;white-space:nowrap';
+  badge.innerHTML = `🔄 Données : ${now.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'})} ${now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
+  document.getElementById('nav').appendChild(badge);
+
+  hideLoading();
+}
+
+// ── LAUNCH ──
+setStatus('Connexion à Google Sheets…');
+fetch(SCRIPT_URL)
+  .then(r => {
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    setStatus('Données reçues, parsing…');
+    return r.json();
+  })
+  .then(rows => {
+    const parsed = parseSheetData(rows);
+    buildDashboard(parsed);
+  })
+  .catch(err => {
+    console.error('Erreur chargement sheet:', err);
+    // Fallback: build with static data
+    setStatus('Données live indisponibles — chargement données statiques…');
+    setTimeout(() => {
+      buildDashboard({
+        newAllData: allData,
+        newREF: REF,
+        newDiets: diets,
+        periodLabels: P
+      });
+    }, 1000);
+  });
 </script>
