@@ -786,11 +786,19 @@ function buildAll(){
       <div><span class="bdg bdg-all">Référentiel global</span> <span class="bdg bdg-warn">Non comparable aux diéts individuelles</span></div>
     </div>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
-    <div class="kpi-c"><div class="kpi-lbl">Impact marge suivi <span style="color:#5B0F9E">DB</span></div><div class="kpi-val c-db">+31%</div><div class="kpi-sub">586€ vs 447€ moyen ALL</div></div>
-    <div class="kpi-c"><div class="kpi-lbl">Impact marge suivi <span style="color:#5A7A1A">KD</span></div><div class="kpi-val c-kd">+103%</div><div class="kpi-sub">620€ vs 306€ moyen ALL</div></div>
-    <div class="kpi-c"><div class="kpi-lbl">Clients recrutés <span style="color:#5B0F9E">DB</span></div><div class="kpi-val c-db">1 159</div><div class="kpi-sub">Oct–Déc 25</div></div>
-    <div class="kpi-c"><div class="kpi-lbl">Clients recrutés <span style="color:#5A7A1A">KD</span></div><div class="kpi-val c-kd">386</div><div class="kpi-sub">Oct–Déc 25</div></div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;" id="all-kpi-grid">
+    <div class="kpi-c"><div class="kpi-lbl">Impact marge suivi <span style="color:#5B0F9E">DB</span></div>
+      <div class="kpi-val c-db">+${Math.round((allData.maSuDB[0]/allData.maSnDB[0]-1)*100)}%</div>
+      <div class="kpi-sub">${allData.maSuDB[0]}€ vs ${allData.maSnDB[0]}€ moyen ALL</div></div>
+    <div class="kpi-c"><div class="kpi-lbl">Impact marge suivi <span style="color:#5A7A1A">KD</span></div>
+      <div class="kpi-val c-kd">+${Math.round((allData.maSuKD[0]/allData.maSnKD[0]-1)*100)}%</div>
+      <div class="kpi-sub">${allData.maSuKD[0]}€ vs ${allData.maSnKD[0]}€ moyen ALL</div></div>
+    <div class="kpi-c"><div class="kpi-lbl">Clients recrutés <span style="color:#5B0F9E">DB</span></div>
+      <div class="kpi-val c-db">${(allData.totCDB[0]||0).toLocaleString('fr-FR')}</div>
+      <div class="kpi-sub">${P[0]}</div></div>
+    <div class="kpi-c"><div class="kpi-lbl">Clients recrutés <span style="color:#5A7A1A">KD</span></div>
+      <div class="kpi-val c-kd">${(allData.totCKD[0]||0).toLocaleString('fr-FR')}</div>
+      <div class="kpi-sub">${P[0]}</div></div>
   </div>
   <div class="bleg">
     <div class="bleg-item"><div class="bleg-dot" style="background:#5B0F9E"></div>Dietbon (DB)</div>
@@ -999,9 +1007,10 @@ function parseSheetData(rows) {
     const r = rows[i];
     if (String(r[0]||'').trim()==='Marque' || String(r[1]||'').trim()==='Catégorie') {
       headerRow = i;
-      for (let c = 4; c < r.length; c++) {
+      // Start from col 3 (D) since user inserts new periods in column D
+      for (let c = 3; c < r.length; c++) {
         const lbl = String(r[c]||'').trim();
-        if (lbl && lbl.includes('/')) periodCols.push({col:c, label:lbl});
+        if (lbl && lbl.includes('/') && lbl.length > 3) periodCols.push({col:c, label:lbl});
       }
       break;
     }
@@ -1043,7 +1052,7 @@ function parseSheetData(rows) {
 
   if (periodCols.length === 0) {
     // Last resort: try to find period info in row 0 (dates) or row 1 (text)
-    for (let c = 4; c < (rows[0]||[]).length; c++) {
+    for (let c = 3; c < (rows[0]||[]).length; c++) {
       const v0 = rows[0][c], v1 = (rows[1]||[])[c];
       const v = v0 || v1;
       if (v) {
@@ -1062,14 +1071,31 @@ function parseSheetData(rows) {
     if (d instanceof Date) {
       return months[d.getMonth()+1] + ' ' + String(d.getFullYear()).slice(2);
     }
-    const s = String(d);
-    const m = s.match(/(\d+)\/(\d+)\s*à\s*(\d+)\/(\d+)/);
-    if (m) return months[parseInt(m[1])]+'–'+months[parseInt(m[3])]+' '+(2000+parseInt(m[2]));
+    const s = String(d).trim();
+    // Handle "11/25 à 01/2026" or "11/25 à 01/26"
+    // Format: startMonth/startYear à endMonth/endYear
+    const m = s.match(/(\d+)\/(\d+)\s*[àa]\s*(\d+)\/(\d+)/);
+    if (m) {
+      const startMonth = parseInt(m[1]);
+      const endMonth   = parseInt(m[3]);
+      const endYearRaw = m[4];
+      // Use END year for the label (more meaningful for cross-year periods)
+      const endYear = endYearRaw.length === 4 ? parseInt(endYearRaw) : 2000 + parseInt(endYearRaw);
+      return months[startMonth] + '–' + months[endMonth] + ' ' + endYear;
+    }
+    // Handle single "10/25"
+    const m2 = s.match(/(\d+)\/(\d+)/);
+    if (m2) return months[parseInt(m2[1])] + ' ' + (2000+parseInt(m2[2]));
     return s;
   }
 
-  const periodLabels = periodCols.map(p => formatDatePeriod(p.label)||p.label);
+  // Sort periods newest-first by converting labels to sortable dates
+  // Column order in sheet: D=newest, E, F, G, H=oldest
+  // Since we read left to right from col 4, order is already newest first
+  const periodLabels = periodCols.map(p => formatDatePeriod(p.label)||String(p.label));
   const nPeriods = periodCols.length;
+  
+  console.log('Périodes détectées:', periodLabels);
 
   setStatus(`${nPeriods} période(s) détectée(s)…`);
 
@@ -1088,7 +1114,9 @@ function parseSheetData(rows) {
     const key = marque + '|' + cat + '|' + (diet||'all');
     const vals = periodCols.map(p => {
       const v = r[p.col];
-      return (v === null || v === undefined || v === '') ? null : parseFloat(v) || 0;
+      if (v === null || v === undefined || v === '' || v === 0) return null;
+      const n = parseFloat(v);
+      return isNaN(n) ? null : n;
     });
     lookup[key] = vals;
   }
@@ -1104,15 +1132,21 @@ function parseSheetData(rows) {
   }
 
   // ── ALL data ──
+  const maSuDB_ = getNonNull('DB','Marge Avec suivi','all');
+  const maSuKD_ = getNonNull('KD','Marge Avec suivi','all');
+  const maSnDB_ = getNonNull('DB','Marge Sans suivi','all');
+  const maSnKD_ = getNonNull('KD','Marge Sans suivi','all');
+
   const newAllData = {
-    margeDB:  getNonNull('DB','Marge Avec suivi','all'),
-    margeKD:  getNonNull('KD','Marge Avec suivi','all'),
+    // ratios avec/sans suivi for the ALL panel display
+    margeDB:  maSuDB_.map((v,i) => maSnDB_[i] ? parseFloat((v/maSnDB_[i]).toFixed(4)) : 0),
+    margeKD:  maSuKD_.map((v,i) => maSnKD_[i] ? parseFloat((v/maSnKD_[i]).toFixed(4)) : 0),
     totCDB:   getNonNull('DB','Clients recrutés','all'),
     totCKD:   getNonNull('KD','Clients recrutés','all'),
-    maSuDB:   getNonNull('DB','Marge Avec suivi','all'),
-    maSuKD:   getNonNull('KD','Marge Avec suivi','all'),
-    maSnDB:   getNonNull('DB','Marge Sans suivi','all'),
-    maSnKD:   getNonNull('KD','Marge Sans suivi','all'),
+    maSuDB:   maSuDB_,
+    maSuKD:   maSuKD_,
+    maSnDB:   maSnDB_,
+    maSnKD:   maSnKD_,
   };
 
   // ── REF from most recent period (index 0 = newest column) ──
