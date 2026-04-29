@@ -187,11 +187,15 @@ const REF={DB:{sans:447,suivi:586},KD:{sans:306,suivi:620},TOT:{sans:400,suivi:5
 const allData={
   margeDB:[1.31,1.29,1.28,1.25],
   margeKD:[2.03,1.86,1.75,1.84],
+  vsAllDB:[1.12,1.12,1.10,1.09],
+  vsAllKD:[1.56,1.49,1.41,1.48],
   totCDB:[1159,1821,1990,1759],totCKD:[386,638,719,729],
   maSuDB:[586,604,604,585],
   maSuKD:[620,575,544,532],
   maSnDB:[447,469,472,468],
   maSnKD:[306,309,311,289],
+  maAllDB:[522,540,547,537],
+  maAllKD:[398,387,386,360],
 };
 
 const diets=[
@@ -813,18 +817,20 @@ function buildAll(){
   regTabs('ALL',tabs);
 
   h+=`<div id="ALL-kpi" class="tab-c on" style="display:block"><div class="tw"><table>
-    <thead><tr><th>Marque</th><th>Période</th><th>Marge Diet vs hors-suivi</th><th></th><th>Marge Diet vs moy. équipe</th><th></th></tr></thead><tbody>`;
+    <thead><tr><th>Marque</th><th>Période</th><th>Marge Diet vs hors-suivi</th><th></th><th>Marge Diet vs ALL clients</th><th></th></tr></thead><tbody>`;
   ['DB','KD'].forEach(brand=>{
     const ma=brand==='DB'?d.margeDB:d.margeKD;
+    const vsAll=brand==='DB'?d.vsAllDB:d.vsAllKD;
     const rc=brand==='DB'?'rw-db':'rw-kd';
     ma.forEach((v,i)=>{
-      const prev=i<3?ma[i+1]:null;
       const col=brand==='DB'?'c-db':'c-kd';
+      const vsAllVal=vsAll&&vsAll[i]?vsAll[i]:0;
+      const vsAllPct=((vsAllVal-1)*100).toFixed(0);
       h+=`<tr class="${rc}"><td>${bp(brand)}</td><td>${P[i]}</td>
         <td class="${col}" style="font-family:var(--mono)">×${v.toFixed(2)} <small style="opacity:.6">(+${((v-1)*100).toFixed(0)}%)</small></td>
         <td>${bbar(v,brand)}</td>
-        <td class="${col}" style="font-family:var(--mono)">${brand==='DB'?((d.maSuDB[i]/d.maSnDB[i]-1)*100).toFixed(0):((d.maSuKD[i]/d.maSnKD[i]-1)*100).toFixed(0)}% <small style="opacity:.6">vs sans-suivi</small></td>
-        <td>${bbar(v,brand)}</td></tr>`;
+        <td class="${col}" style="font-family:var(--mono)">×${vsAllVal.toFixed(2)} <small style="opacity:.6">(+${vsAllPct}%)</small></td>
+        <td>${bbar(vsAllVal,brand)}</td></tr>`;
     });
   });
   h+=`</tbody></table></div></div>`;
@@ -1136,17 +1142,23 @@ function parseSheetData(rows) {
   const maSuKD_ = getNonNull('KD','Marge Avec suivi','all');
   const maSnDB_ = getNonNull('DB','Marge Sans suivi','all');
   const maSnKD_ = getNonNull('KD','Marge Sans suivi','all');
+  const maAllDB_ = getNonNull('DB','Marge','all');   // marge ALL clients (avec + sans)
+  const maAllKD_ = getNonNull('KD','Marge','all');   // marge ALL clients (avec + sans)
 
   const newAllData = {
-    // ratios avec/sans suivi for the ALL panel display
     margeDB:  maSuDB_.map((v,i) => maSnDB_[i] ? parseFloat((v/maSnDB_[i]).toFixed(4)) : 0),
     margeKD:  maSuKD_.map((v,i) => maSnKD_[i] ? parseFloat((v/maSnKD_[i]).toFixed(4)) : 0),
+    // Marge Diet Vs ALL = marge avec suivi / marge ALL (tous clients)
+    vsAllDB:  maSuDB_.map((v,i) => maAllDB_[i] ? parseFloat((v/maAllDB_[i]).toFixed(4)) : 0),
+    vsAllKD:  maSuKD_.map((v,i) => maAllKD_[i] ? parseFloat((v/maAllKD_[i]).toFixed(4)) : 0),
     totCDB:   getNonNull('DB','Clients recrutés','all'),
     totCKD:   getNonNull('KD','Clients recrutés','all'),
     maSuDB:   maSuDB_,
     maSuKD:   maSuKD_,
     maSnDB:   maSnDB_,
     maSnKD:   maSnKD_,
+    maAllDB:  maAllDB_,
+    maAllKD:  maAllKD_,
   };
 
   // ── REF from most recent period (index 0 = newest column) ──
@@ -1240,6 +1252,11 @@ function buildDashboard({ newAllData, newREF, newDiets, periodLabels }) {
   P.length=0; periodLabels.forEach(l=>P.push(l));
   Object.assign(REF, newREF);
   Object.assign(allData, newAllData);
+  // Ensure vsAll arrays are available globally for buildAll()
+  allData.vsAllDB = newAllData.vsAllDB;
+  allData.vsAllKD = newAllData.vsAllKD;
+  allData.maAllDB = newAllData.maAllDB;
+  allData.maAllKD = newAllData.maAllKD;
   diets.length=0; newDiets.forEach(d=>diets.push(d));
 
   // Clear nav and panels
