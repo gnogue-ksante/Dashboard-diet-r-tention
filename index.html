@@ -988,126 +988,212 @@ function showError(msg) {
 
 // Parse the raw 2D array from Apps Script into structured data
 function parseSheetData(rows) {
-  setStatus('Parsing des données…');
+  setStatus('Analyse de la structure…');
 
-  // Find header row (contains period labels like "10/25 à 12/25")
+  // ── Find header row (row 2 in sheet = index 1) ──
+  // Header row has: col0=Marque, col1=Catégorie, col2=Diet, col3=empty, col4+=periods
   let headerRow = -1;
-  let periods = [];
-  for(let i=0; i<rows.length; i++) {
-    const row = rows[i];
-    if(row[1] === 'Catégorie' && row[2] === 'Diet') {
+  let periodCols = []; // {col, label}
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (String(r[0]||'').trim()==='Marque' || String(r[1]||'').trim()==='Catégorie') {
       headerRow = i;
-      // Extract period columns (cols 4+)
-      for(let c=4; c<row.length; c++) {
-        if(row[c]) periods.push({col:c, label:String(row[c]).trim()});
+      for (let c = 4; c < r.length; c++) {
+        const lbl = String(r[c]||'').trim();
+        if (lbl && lbl.includes('/')) periodCols.push({col:c, label:lbl});
+      }
+      break;
+    }
+    // Also try row 1 pattern: check if row 0 has dates and row 1 has string labels
+    if (i === 1 && String(r[0]||'').trim()==='DB') {
+      // Header is row before this one
+      headerRow = 0;
+      const prevRow = rows[0];
+      for (let c = 4; c < prevRow.length; c++) {
+        const v = prevRow[c];
+        if (v) {
+          // Could be a date object or string like "10/25 à 12/25"
+          const lbl = v instanceof Date
+            ? formatDatePeriod(v)
+            : String(v).trim();
+          if (lbl) periodCols.push({col:c, label:lbl});
+        }
       }
       break;
     }
   }
 
-  if(headerRow === -1) throw new Error('Structure du sheet non reconnue — vérifier que l\'onglet s\'appelle "LTV&Marges"');
-
-  // Format period labels nicely
-  function fmtPeriod(raw) {
-    // "10/25 à 12/25" → "Oct–Déc 25"
-    const months = ['','Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
-    const m = String(raw).match(/(\d+)\/(\d+) à (\d+)\/(\d+)/);
-    if(!m) return raw;
-    return months[parseInt(m[1])] + '–' + months[parseInt(m[3])] + ' ' + (2000+parseInt(m[2]));
+  // Fallback: scan for first row with period-like content in col 4
+  if (headerRow === -1) {
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const r = rows[i];
+      if (r[4] && (String(r[4]).includes('/') || r[4] instanceof Date)) {
+        headerRow = i;
+        for (let c = 4; c < r.length; c++) {
+          if (r[c]) {
+            const lbl = r[c] instanceof Date ? formatDatePeriod(r[c]) : String(r[c]).trim();
+            if (lbl) periodCols.push({col:c, label:lbl});
+          }
+        }
+        break;
+      }
+    }
   }
 
-  const periodLabels = periods.map(p => fmtPeriod(p.label));
+  if (periodCols.length === 0) {
+    // Last resort: try to find period info in row 0 (dates) or row 1 (text)
+    for (let c = 4; c < (rows[0]||[]).length; c++) {
+      const v0 = rows[0][c], v1 = (rows[1]||[])[c];
+      const v = v0 || v1;
+      if (v) {
+        const lbl = v instanceof Date ? formatDatePeriod(v) : String(v).trim();
+        if (lbl && lbl !== '') periodCols.push({col:c, label:lbl});
+      }
+    }
+  }
 
-  // Build lookup: {marque+catégorie+diet → [values per period]}
+  if (periodCols.length === 0) throw new Error('Aucune période trouvée dans le sheet. Vérifier que la ligne 2 contient les libellés de période (ex: "10/25 à 12/25").');
+
+  // Format period labels
+  function formatDatePeriod(d) {
+    if (!d) return '';
+    const months=['','Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    if (d instanceof Date) {
+      return months[d.getMonth()+1] + ' ' + String(d.getFullYear()).slice(2);
+    }
+    const s = String(d);
+    const m = s.match(/(\d+)\/(\d+)\s*à\s*(\d+)\/(\d+)/);
+    if (m) return months[parseInt(m[1])]+'–'+months[parseInt(m[3])]+' '+(2000+parseInt(m[2]));
+    return s;
+  }
+
+  const periodLabels = periodCols.map(p => formatDatePeriod(p.label)||p.label);
+  const nPeriods = periodCols.length;
+
+  setStatus(`${nPeriods} période(s) détectée(s)…`);
+
+  // ── Build lookup from all data rows ──
+  // key: "MARQUE|CATEGORIE|DIET" → array of values per period
   const lookup = {};
-  for(let i=headerRow+1; i<rows.length; i++) {
-    const row = rows[i];
-    const marque = String(row[0]||'').trim();
-    const cat    = String(row[1]||'').trim();
-    const diet   = String(row[2]||'').trim();
-    if(!marque || !cat) continue;
-    const key = marque+'|'+cat+'|'+diet;
-    lookup[key] = periods.map(p => parseFloat(row[p.col])||0);
+  const dataStart = headerRow + 1;
+
+  for (let i = dataStart; i < rows.length; i++) {
+    const r = rows[i];
+    const marque = String(r[0]||'').trim();
+    const cat    = String(r[1]||'').trim();
+    const diet   = String(r[2]||'').trim().toLowerCase();
+    if (!marque || !cat) continue;
+
+    const key = marque + '|' + cat + '|' + (diet||'all');
+    const vals = periodCols.map(p => {
+      const v = r[p.col];
+      return (v === null || v === undefined || v === '') ? null : parseFloat(v) || 0;
+    });
+    lookup[key] = vals;
   }
 
   function get(marque, cat, diet) {
-    return lookup[marque+'|'+cat+'|'+(diet||'all')] || periods.map(()=>0);
+    const key = marque + '|' + cat + '|' + (diet||'all').toLowerCase();
+    return lookup[key] || Array(nPeriods).fill(0);
   }
 
-  // ── Build allData ──
+  function getNonNull(marque, cat, diet) {
+    const v = get(marque, cat, diet);
+    return v.map(x => x === null ? 0 : x);
+  }
+
+  // ── ALL data ──
   const newAllData = {
-    margeDB: get('DB','Marge Diet Vs SANS diet','all'),
-    margeKD: get('KD','LTV Diet Vs SANS diet','all'), // ratio KD
-    totCDB:  get('DB','Clients recrutés','all'),
-    totCKD:  get('KD','Clients recrutés','all'),
-    maSuDB:  get('DB','Marge Avec suivi','all'),
-    maSuKD:  get('KD','Marge Avec suivi','all'),
-    maSnDB:  get('DB','Marge Sans suivi','all'),
-    maSnKD:  get('KD','Marge Sans suivi','all'),
+    margeDB:  getNonNull('DB','Marge Avec suivi','all'),
+    margeKD:  getNonNull('KD','Marge Avec suivi','all'),
+    totCDB:   getNonNull('DB','Clients recrutés','all'),
+    totCKD:   getNonNull('KD','Clients recrutés','all'),
+    maSuDB:   getNonNull('DB','Marge Avec suivi','all'),
+    maSuKD:   getNonNull('KD','Marge Avec suivi','all'),
+    maSnDB:   getNonNull('DB','Marge Sans suivi','all'),
+    maSnKD:   getNonNull('KD','Marge Sans suivi','all'),
   };
 
-  // ── Build REF from most recent period (index 0) ──
+  // ── REF from most recent period (index 0 = newest column) ──
   const newREF = {
-    DB: { sans: newAllData.maSnDB[0]||447, suivi: newAllData.maSuDB[0]||586 },
-    KD: { sans: newAllData.maSnKD[0]||306, suivi: newAllData.maSuKD[0]||620 },
-    TOT:{ sans: 400, suivi: 591 }
+    DB:  { sans: newAllData.maSnDB[0]||447,  suivi: newAllData.maSuDB[0]||586 },
+    KD:  { sans: newAllData.maSnKD[0]||306,  suivi: newAllData.maSuKD[0]||620 },
+    TOT: { sans: getNonNull('TOTAL','Marge Sans suivi','all')[0]||400,
+           suivi: getNonNull('TOTAL','Marge Avec suivi','all')[0]||591 }
   };
 
-  // ── Build diets array ──
+  // Moy equipe per period
+  const moyDB  = newAllData.maSuDB;
+  const moyKD  = newAllData.maSuKD;
+  const moyTOT = getNonNull('TOTAL','Marge Avec suivi','all');
+
+  // ── Build diets ──
   const dietNames = Object.keys(DIET_META);
   const newDiets = [];
 
-  // Moy equipe per period per marque
-  const moyDB  = periods.map((_,pi) => newAllData.maSuDB[pi]||586);
-  const moyKD  = periods.map((_,pi) => newAllData.maSuKD[pi]||620);
-  const moyTOT = periods.map((_,pi) => ((newAllData.maSuDB[pi]||586)+(newAllData.maSuKD[pi]||620))/2);
+  setStatus('Calcul des indicateurs…');
 
-  for(const name of dietNames) {
+  for (const name of dietNames) {
     const meta = DIET_META[name];
-    const mDB  = get('DB','Marge',name);
-    const mKD  = get('KD','Marge',name);
-    const mvsDB  = get('DB','Marge Diet Vs Marge hors suivi',name);
-    const mvsKD  = get('KD','Marge Diet Vs Marge hors suivi',name);
-    const mvsTOT = get('TOTAL','Marge Diet Vs Marge hors suivi',name);
-    const poolDB = get('DB','Pool',name).map(v=>parseFloat((v*100).toFixed(2)));
-    const poolKD = get('KD','Pool',name).map(v=>parseFloat((v*100).toFixed(2)));
-    const cDB    = get('DB','Clients recrutés',name);
-    const cKD    = get('KD','Clients recrutés',name);
-    const mTOT   = get('TOTAL','Marge',name);
+    const dKey = name.toLowerCase();
 
-    // Compute ratios vs moy equipe
-    const ratioMoyDB  = periods.map((_,pi) => moyDB[pi]  ? parseFloat((mDB[pi]/moyDB[pi]).toFixed(4))  : 0);
-    const ratioMoyKD  = periods.map((_,pi) => moyKD[pi]  ? parseFloat((mKD[pi]/moyKD[pi]).toFixed(4))  : 0);
-    const ratioMoyTOT = periods.map((_,pi) => moyTOT[pi] ? parseFloat((mTOT[pi]/moyTOT[pi]).toFixed(4)): 0);
+    const mDB  = getNonNull('DB','Marge',dKey);
+    const mKD  = getNonNull('KD','Marge',dKey);
+    const mTOT = getNonNull('TOTAL','Marge',dKey);
+    const cDB  = getNonNull('DB','Clients recrutés',dKey);
+    const cKD  = getNonNull('KD','Clients recrutés',dKey);
 
-    // Compute ranks (will be set after all diets computed)
-    const margeDBobj  = ratioMoyDB.map(v=>  ({v,r:0}));
-    const margeKDobj  = ratioMoyKD.map(v=>  ({v,r:0}));
-    const margeTOTobj = ratioMoyTOT.map(v=> ({v,r:0}));
+    // Pool = clients diet / clients total ALL
+    const totCDB = getNonNull('DB','Clients recrutés','all');
+    const totCKD = getNonNull('KD','Clients recrutés','all');
+    const totCTOT= getNonNull('TOTAL','Clients recrutés','all');
+    const poolDB  = cDB.map((v,i)  => totCDB[i]  ? parseFloat((v/totCDB[i]*100).toFixed(2))  : 0);
+    const poolKD  = cKD.map((v,i)  => totCKD[i]  ? parseFloat((v/totCKD[i]*100).toFixed(2))  : 0);
+
+    // Marge Diet Vs hors suivi — try to read from sheet first, calculate fallback
+    let mvsDB  = get('DB','Marge Diet Vs Marge hors suivi',dKey);
+    let mvsKD  = get('KD','Marge Diet Vs Marge hors suivi',dKey);
+    let mvsTOT = get('TOTAL','Marge Diet Vs Marge hors suivi',dKey);
+
+    // If sheet values are 0 or null (formulas not evaluated), compute manually
+    mvsDB  = mvsDB.map((v,i)  => (v && v>0) ? v : (newAllData.maSnDB[i]  ? parseFloat((mDB[i]/newAllData.maSnDB[i]).toFixed(4))  : 0));
+    mvsKD  = mvsKD.map((v,i)  => (v && v>0) ? v : (newAllData.maSnKD[i]  ? parseFloat((mKD[i]/newAllData.maSnKD[i]).toFixed(4))  : 0));
+    mvsTOT = mvsTOT.map((v,i) => (v && v>0) ? v : (newREF.TOT.sans       ? parseFloat((mTOT[i]/newREF.TOT.sans).toFixed(4))       : 0));
+
+    // Ratios vs moy equipe
+    const ratioMoyDB  = mDB.map((v,i)  => moyDB[i]  ? parseFloat((v/moyDB[i]).toFixed(4))  : 0);
+    const ratioMoyKD  = mKD.map((v,i)  => moyKD[i]  ? parseFloat((v/moyKD[i]).toFixed(4))  : 0);
+    const ratioMoyTOT = mTOT.map((v,i) => moyTOT[i] ? parseFloat((v/moyTOT[i]).toFixed(4)) : 0);
 
     newDiets.push({
       name, ...meta,
       summary: `Données live · ${periodLabels[0]}`,
-      margeDB: margeDBobj, margeKD: margeKDobj, margeTOT: margeTOTobj,
+      margeDB:  ratioMoyDB.map(v=>({v,r:0})),
+      margeKD:  ratioMoyKD.map(v=>({v,r:0})),
+      margeTOT: ratioMoyTOT.map(v=>({v,r:0})),
       mvsDB, mvsKD, mvsTOT,
       mDB, mKD, mTOT,
       poolDB, poolKD, cDB, cKD,
       m0DB: mDB[0]||0, m0KD: mKD[0]||0, m0TOT: mTOT[0]||0,
-      atot: `<strong>${name}</strong> — données chargées depuis Google Sheets. Marge TOTAL : <strong>${(mTOT[0]||0).toLocaleString('fr-FR')} €</strong> sur la période ${periodLabels[0]}.`,
-      adb:  `Sur <strong>Dietbon</strong>, ${name} génère <strong>${(mDB[0]||0).toLocaleString('fr-FR')} €</strong> de marge par client (×${(mvsDB[0]||0).toFixed(2)} vs hors-suivi).`,
-      akd:  `Sur <strong>KitchenDiet</strong>, ${name} génère <strong>${(mKD[0]||0).toLocaleString('fr-FR')} €</strong> de marge par client (×${(mvsKD[0]||0).toFixed(2)} vs hors-suivi).`,
-      verdict: `Données mises à jour automatiquement depuis Google Sheets.`
+      atot: `<strong>${name}</strong> — marge TOTAL : <strong>${(mTOT[0]||0).toLocaleString('fr-FR')} €</strong> · période ${periodLabels[0]}.`,
+      adb:  `Sur <strong>Dietbon</strong>, ${name} génère <strong>${(mDB[0]||0).toLocaleString('fr-FR')} €</strong> de marge par client · ×${(mvsDB[0]||0).toFixed(2)} vs hors-suivi · ${cDB[0]||0} clients.`,
+      akd:  `Sur <strong>KitchenDiet</strong>, ${name} génère <strong>${(mKD[0]||0).toLocaleString('fr-FR')} €</strong> de marge par client · ×${(mvsKD[0]||0).toFixed(2)} vs hors-suivi · ${cKD[0]||0} clients.`,
+      verdict: `Données mises à jour automatiquement depuis Google Sheets · ${new Date().toLocaleDateString('fr-FR')}.`
     });
   }
 
   // ── Compute ranks per period ──
-  for(let pi=0; pi<periods.length; pi++) {
-    const sortedDB  = [...newDiets].sort((a,b)=>b.mDB[pi]-a.mDB[pi]);
-    const sortedKD  = [...newDiets].sort((a,b)=>b.mKD[pi]-a.mKD[pi]);
-    const sortedTOT = [...newDiets].sort((a,b)=>b.mTOT[pi]-a.mTOT[pi]);
-    sortedDB.forEach((d,i)=>  { const dd=newDiets.find(x=>x.name===d.name); dd.margeDB[pi].r=i+1; });
-    sortedKD.forEach((d,i)=>  { const dd=newDiets.find(x=>x.name===d.name); dd.margeKD[pi].r=i+1; });
-    sortedTOT.forEach((d,i)=> { const dd=newDiets.find(x=>x.name===d.name); dd.margeTOT[pi].r=i+1; });
+  for (let pi = 0; pi < nPeriods; pi++) {
+    ['DB','KD','TOT'].forEach(brand => {
+      const key = 'marge'+brand;
+      const mKey = brand==='DB'?'mDB':brand==='KD'?'mKD':'mTOT';
+      const sorted = [...newDiets].sort((a,b) => (b[mKey][pi]||0)-(a[mKey][pi]||0));
+      sorted.forEach((d,i) => {
+        const dd = newDiets.find(x=>x.name===d.name);
+        dd[key][pi].r = i+1;
+      });
+    });
   }
 
   return { newAllData, newREF, newDiets, periodLabels };
