@@ -676,7 +676,7 @@ function buildPanel(d){
             return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">'+
               '<div style="font-size:7px;color:'+clr+';font-weight:600">'+fmtFn(v)+'</div>'+
               '<div style="height:'+hp+'px;background:'+clr+';border-radius:2px;width:100%;opacity:.8"></div>'+
-              '<div style="font-size:7px;color:var(--color-text-secondary)">S'+weeks8[ii]+'</div>'+
+              '<div style="font-size:7px;color:var(--color-text-secondary)">S'+(weeks8[ii]||'?')+'</div>'+
             '</div>';
           }).join('')+'</div>';
       }
@@ -1366,38 +1366,75 @@ function parseSheetData(rows) {
 function parseHebdoData(rows) {
   if(!rows || rows.length < 10) return null;
 
-  // ── Week numbers from row 5 (idx 4), cols D+ (idx 3+)
+  // ── Build week map from anchor date ──
+  // Anchor: col 7 (idx 7) = week 14 of 2025 = 31/03/2025
+  // Row 5 (idx 4) has week numbers, cols starting at idx 3
   const weekRow = rows[4] || [];
-  const weeks = [];
-  for(let c = 3; c < weekRow.length; c++) {
-    const v = weekRow[c];
-    if(v !== null && v !== undefined && v !== '' && !isNaN(parseFloat(v))) {
-      weeks.push({col: c, num: Math.round(parseFloat(v))});
-    }
+  const ANCHOR_COL = 7;
+  const ANCHOR_DATE = new Date(2025, 2, 31); // 31 March 2025
+
+  const weekMap = []; // {col, week, year, date, label}
+  for(let i = 3; i < weekRow.length; i++) {
+    const v = weekRow[i];
+    if(v === null || v === undefined || v === '') continue;
+    const wn = parseFloat(v);
+    if(isNaN(wn)) continue;
+    const weekNum = Math.round(wn);
+    // Calculate date from anchor
+    const msOffset = (i - ANCHOR_COL) * 7 * 24 * 3600 * 1000;
+    const d = new Date(ANCHOR_DATE.getTime() + msOffset);
+    let yr = d.getFullYear();
+    // Cross-year fix
+    if(d.getMonth() === 0 && weekNum > 50) yr--;
+    else if(d.getMonth() === 11 && weekNum < 5) yr++;
+    weekMap.push({col:i, week:weekNum, year:yr, date:d,
+      label: yr+'-S'+(weekNum<10?'0':'')+weekNum});
   }
 
-  // Helper: get numeric value from cell, null if invalid
+  if(weekMap.length === 0) return null;
+
+  // ── Period → weeks mapping ──
+  // Given period string "11/25 à 01/26", find all weekMap entries whose date falls in those months
+  function weeksForPeriod(periodStr) {
+    if(!periodStr) return [];
+    const m = String(periodStr).match(/(\d+)\/(\d+)\s*[àa]\s*(\d+)\/(\d+)/);
+    if(!m) return [];
+    const sm = parseInt(m[1]), sy = 2000+parseInt(m[2]);
+    const em = parseInt(m[3]), ey = 2000+parseInt(m[4]);
+    const startD = new Date(sy, sm-1, 1);
+    const endD   = new Date(ey, em, 0); // last day of end month
+    return weekMap.filter(w => w.date >= startD && w.date <= endD);
+  }
+
+  // Build period→weeks lookup (populated when LTV periods are known)
+  const periodWeeks = {}; // "11/25 à 01/26" → [{col, week, year, ...}]
+
+  // Helper: safe numeric
   function num(v) {
-    if(v === null || v === undefined || v === '' || v === '#DIV/0!' || v === '#REF!') return null;
+    if(v === null || v === undefined || v === '' || String(v).includes('DIV') || String(v).includes('REF')) return null;
     const n = parseFloat(v);
     return isNaN(n) ? null : n;
   }
 
-  // Helper: extract a diet→values map from a section
-  // sectionStartRow (0-based idx of label row), dataRows = [{name, rowIdx}]
-  function extractSection(dataRows) {
+  // ── Extract section: name→{name, vals[], weeks[]} ──
+  function extractSection(rowDefs) {
     const result = {};
-    dataRows.forEach(({name, rowIdx}) => {
+    rowDefs.forEach(({name, rowIdx}) => {
       if(rowIdx >= rows.length) return;
       const row = rows[rowIdx] || [];
-      const vals = weeks.map(w => num(row[w.col]));
-      result[name.toLowerCase()] = {name, vals, weeks: weeks.map(w => w.num)};
+      const vals = weekMap.map(w => num(row[w.col]));
+      result[name.toLowerCase()] = {
+        name, 
+        vals,                          // parallel to weekMap
+        weeks: weekMap.map(w=>w.week),
+        years: weekMap.map(w=>w.year),
+        labels: weekMap.map(w=>w.label)
+      };
     });
     return result;
   }
 
-  // ── TAUX DE VENTE (rows 173-193, 0-based 172-192)
-  // Interne: 174-183 (idx 173-182), Externe: 185-193 (idx 184-192)
+  // ── TAUX DE VENTE (rows 173-193, idx 172-192) ──
   const venteInterne = extractSection([
     {name:'Anaïs',    rowIdx:174},
     {name:'Barbara',  rowIdx:175},
@@ -1411,10 +1448,11 @@ function parseHebdoData(rows) {
     {name:'Charlotte',rowIdx:186},
     {name:'Louise',   rowIdx:188},
     {name:'Nathalie', rowIdx:190},
+    {name:'TOTAL',    rowIdx:191},
     {name:'GLOBAL',   rowIdx:192},
   ]);
 
-  // ── TAUX D'OCCUPATION (rows 36-46, idx 35-45)
+  // ── TAUX D'OCCUPATION (rows 36-46, idx 35-45) ──
   const occupation = extractSection([
     {name:'Anaïs',    rowIdx:37},
     {name:'Barbara',  rowIdx:38},
@@ -1423,7 +1461,7 @@ function parseHebdoData(rows) {
     {name:'TOTAL',    rowIdx:45},
   ]);
 
-  // ── TAUX REMPLISSAGE AGENDA (rows 48-58, idx 47-57)
+  // ── TAUX REMPLISSAGE AGENDA (rows 48-58, idx 47-57) ──
   const remplissage = extractSection([
     {name:'Anaïs',    rowIdx:49},
     {name:'Barbara',  rowIdx:50},
@@ -1432,31 +1470,15 @@ function parseHebdoData(rows) {
     {name:'TOTAL',    rowIdx:57},
   ]);
 
-  // ── NOTE CLIENT INTERNE (rows 283-293, idx 282-292)
-  const noteInterne = extractSection([
-    {name:'Inès',     rowIdx:287},
-    {name:'Sophiane', rowIdx:290},
-    {name:'TOTAL',    rowIdx:292},
-  ]);
-
-  // ── NOTE CLIENT EXTERNE (rows 295-312, idx 294-311)
-  const noteExterne = extractSection([
-    {name:'Amanda',   rowIdx:296},
-    {name:'Axelle',   rowIdx:299},
-    {name:'Charlotte',rowIdx:301},
-    {name:'Louise',   rowIdx:303},
-    {name:'Nathalie', rowIdx:308},
-    {name:'TOTAL',    rowIdx:311},
-  ]);
-
-  // ── TAUX JOIGNABILITÉ INTERNE (rows 251-261, idx 250-260)
+  // ── JOIGNABILITÉ INTERNE (rows 251-261, idx 250-260) ──
   const joignInterne = extractSection([
+    {name:'Anaïs',    rowIdx:252},
     {name:'Inès',     rowIdx:255},
     {name:'Sophiane', rowIdx:258},
     {name:'TOTAL',    rowIdx:260},
   ]);
 
-  // ── TAUX JOIGNABILITÉ EXTERNE (rows 263-280, idx 262-279)
+  // ── JOIGNABILITÉ EXTERNE (rows 263-280, idx 262-279) ──
   const joignExterne = extractSection([
     {name:'Amanda',   rowIdx:264},
     {name:'Axelle',   rowIdx:267},
@@ -1466,31 +1488,1100 @@ function parseHebdoData(rows) {
     {name:'TOTAL',    rowIdx:279},
   ]);
 
-  // ── TAUX SUIVI CLIENT (rows 380-385, idx 379-384)
-  const suiviClient = {
-    rdvRealises: (rows[383]||[]),
-    tauxSuivi:   (rows[383]||[]),
-    weeks: weeks.map(w=>w.num),
-  };
-  // Taux suivi = total RDV / estimation clients actifs
-  const suivi = extractSection([{name:'GLOBAL', rowIdx:383}]);
+  // ── NOTE CLIENT INTERNE (rows 283-293, idx 282-292) ──
+  const noteInterne = extractSection([
+    {name:'Inès',     rowIdx:287},
+    {name:'Sophiane', rowIdx:290},
+    {name:'TOTAL',    rowIdx:292},
+  ]);
+
+  // ── NOTE CLIENT EXTERNE (rows 295-312, idx 294-311) ──
+  const noteExterne = extractSection([
+    {name:'Amanda',   rowIdx:296},
+    {name:'Axelle',   rowIdx:299},
+    {name:'Charlotte',rowIdx:301},
+    {name:'Louise',   rowIdx:303},
+    {name:'Nathalie', rowIdx:308},
+    {name:'TOTAL',    rowIdx:311},
+  ]);
 
   return {
-    weeks: weeks.map(w => w.num),
+    weekMap,
+    weeksForPeriod,  // function: periodStr → weekMap entries
     venteInterne, venteExterne,
     occupation, remplissage,
-    noteInterne, noteExterne,
     joignInterne, joignExterne,
-    suivi,
+    noteInterne, noteExterne,
   };
 }
 
-// ══════════════════════════════════════════════
-// BUILD ACTIVITE PANEL (global)
-// ══════════════════════════════════════════════
-let _hebdoData = null; // stored after fetch
+// ── Helper: get vals for a specific diet+KPI filtered to a period ──
+function hebdoValsForPeriod(dietData, periodWeeksArr) {
+  if(!dietData || !dietData.vals || !periodWeeksArr.length) return [];
+  // Match by col index
+  return periodWeeksArr.map(w => ({
+    week: w.week, year: w.year, label: w.label,
+    val: dietData.vals[periodWeeksArr[0].col - 3 + periodWeeksArr.indexOf(w)]
+    // Actually use col directly:
+  })).map((_,i) => {
+    const w = periodWeeksArr[i];
+    // Find position in weekMap
+    const pos = _hebdoData ? _hebdoData.weekMap.findIndex(wm=>wm.col===w.col) : -1;
+    return {week:w.week, year:w.year, label:w.label, val: pos>=0 ? dietData.vals[pos] : null};
+  });
+}
+
+// ── Corrélation taux de vente ↔ marge ──
+// For each diet + period: compute avg taux de vente during that period,
+// cross with marge/client for same cohorte
+function computeCorrelation(diets, hebdo, pi) {
+  if(!hebdo) return null;
+  const periodStr = _getRawPeriod(pi);
+  const periodWks = periodStr ? hebdo.weeksForPeriod(periodStr) : hebdo.weekMap.slice(-13);
+  if(!periodWks.length) return null;
+
+  const results = [];
+  diets.forEach(d => {
+    const dKey = d.name.toLowerCase();
+    const vData = hebdo.venteInterne[dKey] || hebdo.venteExterne[dKey];
+    const marge0 = d.mDB[0] || 0; // most recent period marge
+
+    if(!vData) return;
+    // Avg taux de vente over the period weeks
+    const pVals = periodWks.map(w => {
+      const pos = hebdo.weekMap.findIndex(wm=>wm.col===w.col);
+      return pos >= 0 ? vData.vals[pos] : null;
+    }).filter(v=>v!==null);
+
+    if(!pVals.length) return;
+    const avgVente = pVals.reduce((a,b)=>a+b,0)/pVals.length;
+
+    results.push({
+      name: d.name, meta: getDietMeta(d.name),
+      avgVente, marge: marge0,
+      mvsDB: d.mvsDB[0]||0,
+      weeks: pVals.length,
+      status: getDietMeta(d.name).status
+    });
+  });
+
+  // Sort by avgVente desc
+  results.sort((a,b) => b.avgVente - a.avgVente);
+
+  // Compute correlation coefficient (Pearson)
+  if(results.length < 3) return {results, corr: null};
+  const n = results.length;
+  const xs = results.map(r=>r.avgVente);
+  const ys = results.map(r=>r.marge);
+  const mx = xs.reduce((a,b)=>a+b)/n, my = ys.reduce((a,b)=>a+b)/n;
+  const num_c = xs.reduce((s,x,i)=>s+(x-mx)*(ys[i]-my),0);
+  const den = Math.sqrt(xs.reduce((s,x)=>s+(x-mx)**2,0)*ys.reduce((s,y)=>s+(y-my)**2,0));
+  const corr = den > 0 ? num_c/den : 0;
+
+  return {results, corr};
+}
 
 function buildActivitePanel() {
+  const h_data = _hebdoData;
+  if(!h_data) {
+    return `<div style="padding:40px;text-align:center;color:var(--color-text-secondary)">
+      <div style="font-size:24px;margin-bottom:12px">📊</div>
+      <div style="font-weight:600;margin-bottom:8px">Données hebdo non disponibles</div>
+      <div style="font-size:13px">Mettre à jour Apps Script pour inclure l'onglet "KPI hebdo"</div>
+    </div>`;
+  }
+
+  const allWeeks = h_data.weekMap;
+  const last8Idxs = allWeeks.map((_,i)=>i).slice(-8);
+  const last8Weeks = allWeeks.slice(-8);
+
+  function pct(v,d=1){return v===null||v===undefined?'—':(v*100).toFixed(d)+'%';}
+  function ntv(v){return v===null||v===undefined?'—':v.toFixed(1)+'/10';}
+  function clPct(v,g,o){return v===null?'':v>=g?'c-g':v>=o?'c-a':'c-r';}
+  function clNote(v){return v===null?'':v>=9?'c-g':v>=8?'c-a':'c-r';}
+
+  function lastVal(data){
+    if(!data||!data.vals) return null;
+    for(let i=data.vals.length-1;i>=0;i--){if(data.vals[i]!==null)return data.vals[i];}
+    return null;
+  }
+  function avgVals(data, idxs){
+    if(!data||!data.vals) return null;
+    const vals=idxs.map(i=>data.vals[i]).filter(v=>v!==null);
+    return vals.length?vals.reduce((a,b)=>a+b)/vals.length:null;
+  }
+
+  // Global last values
+  const gv = lastVal(h_data.venteExterne['global']||h_data.venteInterne['total']);
+  const go = lastVal(h_data.occupation['total']);
+  const gn = lastVal(h_data.noteInterne['total']||h_data.noteExterne['total']);
+  const gj = lastVal(h_data.joignInterne['total']||h_data.joignExterne['total']);
+  const lastW = allWeeks[allWeeks.length-1];
+
+  let h = `<div class="hcard">
+    <div class="av" style="background:#FFF3E0;color:#E65100;border-color:#FFCC80;font-size:13px;font-weight:700">📅</div>
+    <div class="hinfo">
+      <div class="hname">Activité hebdomadaire</div>
+      <div class="hsub">Taux de vente · Occupation · Satisfaction · Joignabilité · ${allWeeks.length} semaines</div>
+    </div>
+  </div>`;
+
+  // KPI globaux
+  h += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    <div class="kpi-c"><div class="kpi-lbl">Taux de vente global</div>
+      <div class="kpi-val" style="color:${gv!==null?(gv>=0.2?'#16a34a':gv>=0.1?'#d97706':'#dc2626'):'inherit'}">${pct(gv,1)}</div>
+      <div class="kpi-sub">S${lastW.week} ${lastW.year} · toutes diéts</div></div>
+    <div class="kpi-c"><div class="kpi-lbl">Taux d'occupation</div>
+      <div class="kpi-val" style="color:${go!==null?(go>=0.85?'#16a34a':go>=0.7?'#d97706':'#dc2626'):'inherit'}">${pct(go,1)}</div>
+      <div class="kpi-sub">Internes · dernière semaine</div></div>
+    <div class="kpi-c"><div class="kpi-lbl">Note client moyenne</div>
+      <div class="kpi-val" style="color:${gn!==null?(gn>=9?'#16a34a':gn>=8?'#d97706':'#dc2626'):'inherit'}">${ntv(gn)}</div>
+      <div class="kpi-sub">Toutes diéts · dernière semaine</div></div>
+    <div class="kpi-c"><div class="kpi-lbl">Joignabilité</div>
+      <div class="kpi-val" style="color:${gj!==null?(gj>=0.85?'#16a34a':gj>=0.7?'#d97706':'#dc2626'):'inherit'}">${pct(gj,1)}</div>
+      <div class="kpi-sub">Dernière semaine disponible</div></div>
+  </div>`;
+
+  // Period selector for correlation tab
+  const ltvPeriods = P; // from LTV&Marges
+  h += `<div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:11px;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.07em">Période analysée :</span>
+    ${ltvPeriods.map((lbl,pi)=>`<button class="ct-btn${pi===0?' on':''}" data-act-period="${pi}" onclick="setActPeriod(${pi})" style="font-size:11px">${lbl}</button>`).join('')}
+  </div>`;
+
+  // Main tabs
+  const actTabs = ['synthese','taux-vente','occupation','satisfaction','joignabilite','correlation'];
+  h += `<div class="tab-bar">
+    <button class="tb on" data-stab-uid="ACT" data-stab-idx="0" onclick="showTab('ACT',0)">Synthèse</button>
+    <button class="tb" data-stab-uid="ACT" data-stab-idx="1" onclick="showTab('ACT',1)">Taux de vente</button>
+    <button class="tb" data-stab-uid="ACT" data-stab-idx="2" onclick="showTab('ACT',2)">Occupation</button>
+    <button class="tb" data-stab-uid="ACT" data-stab-idx="3" onclick="showTab('ACT',3)">Satisfaction</button>
+    <button class="tb" data-stab-uid="ACT" data-stab-idx="4" onclick="showTab('ACT',4)">Joignabilité</button>
+    <button class="tb" data-stab-uid="ACT" data-stab-idx="5" onclick="showTab('ACT',5)">📊 Corrélation</button>
+  </div>`;
+  regTabs('ACT', actTabs);
+
+  // Helper: build sparkbar for a row of data
+  function sparkRow(data, idxs, weeks, fmtFn, thG, thO) {
+    if(!data||!data.vals) return idxs.map(()=>'<td style="color:var(--color-text-secondary)">—</td>').join('');
+    return idxs.map((i,ii)=>{
+      const v = data.vals[i];
+      const cl = v===null?'':v>=thG?'c-g':v>=thO?'c-a':'c-r';
+      return `<td class="${cl}" style="font-family:var(--mono)">${v!==null?fmtFn(v):'—'}</td>`;
+    }).join('');
+  }
+
+  function dietNameCell(name){
+    const meta=getDietMeta(name);
+    return `<td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:20px;height:20px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${meta.ini}</div>
+      <span style="font-size:12px">${name}</span>
+      <span class="bdg ${meta.status==='int'?'bdg-int':'bdg-ext'}" style="font-size:9px">${meta.status==='int'?'Int.':'Ext.'}</span>
+    </div></td>`;
+  }
+
+  function weekHeaders(wks){
+    return wks.map(w=>`<th style="font-size:10px">S${w.week}<br><span style="font-weight:400;opacity:.6">${w.year}</span></th>`).join('');
+  }
+
+  // ── TAB SYNTHESE ──
+  h += `<div id="ACT-synthese" class="tab-c" style="display:block">
+  <div class="ltv-sec">
+  <div class="ltv-hd"><span style="font-weight:700;font-size:12px">Dernière semaine disponible — tous indicateurs</span></div>
+  <div class="tw"><table>
+  <thead><tr><th>Diét</th><th>Taux de vente</th><th>Occupation</th><th>Note /10</th><th>Joignabilité</th></tr></thead><tbody>`;
+
+  const synthDiets = [
+    {key:'anaïs',    name:'Anaïs',    vSrc:'venteInterne', oSrc:'occupation', nSrc:'noteInterne',  jSrc:'joignInterne'},
+    {key:'barbara',  name:'Barbara',  vSrc:'venteInterne', oSrc:'occupation', nSrc:'noteInterne',  jSrc:'joignInterne'},
+    {key:'inès',     name:'Inès',     vSrc:'venteInterne', oSrc:'occupation', nSrc:'noteInterne',  jSrc:'joignInterne'},
+    {key:'sophiane', name:'Sophiane', vSrc:'venteInterne', oSrc:'occupation', nSrc:'noteInterne',  jSrc:'joignInterne'},
+    {key:'amanda',   name:'Amanda',   vSrc:'venteExterne', oSrc:null,         nSrc:'noteExterne',  jSrc:'joignExterne'},
+    {key:'axelle',   name:'Axelle',   vSrc:'venteExterne', oSrc:null,         nSrc:'noteExterne',  jSrc:'joignExterne'},
+    {key:'charlotte',name:'Charlotte',vSrc:'venteExterne', oSrc:null,         nSrc:'noteExterne',  jSrc:'joignExterne'},
+    {key:'louise',   name:'Louise',   vSrc:'venteExterne', oSrc:null,         nSrc:'noteExterne',  jSrc:'joignExterne'},
+    {key:'nathalie', name:'Nathalie', vSrc:'venteExterne', oSrc:null,         nSrc:'noteExterne',  jSrc:'joignExterne'},
+  ];
+
+  synthDiets.forEach(d=>{
+    const vv=lastVal(h_data[d.vSrc][d.key]), ov=d.oSrc?lastVal(h_data[d.oSrc][d.key]):null;
+    const nv=lastVal(h_data[d.nSrc][d.key]), jv=lastVal(h_data[d.jSrc][d.key]);
+    h+=`<tr>${dietNameCell(d.name)}
+      <td class="${clPct(vv,.2,.1)}" style="font-family:var(--mono)">${pct(vv)}</td>
+      <td class="${clPct(ov,.85,.7)}" style="font-family:var(--mono)">${ov!==null?pct(ov):'—'}</td>
+      <td class="${clNote(nv)}" style="font-family:var(--mono)">${ntv(nv)}</td>
+      <td class="${clPct(jv,.85,.7)}" style="font-family:var(--mono)">${pct(jv)}</td>
+    </tr>`;
+  });
+  h+=`</tbody></table></div>
+  <div class="ref-bar">Taux de vente <span class="c-g">≥20%</span> <span class="c-a">≥10%</span> <span class="c-r">&lt;10%</span> · Occupation & Joignabilité <span class="c-g">≥85%</span> <span class="c-a">≥70%</span> · Note <span class="c-g">≥9.0</span> <span class="c-a">≥8.0</span></div>
+  </div></div>`;
+
+  // ── TAB TAUX DE VENTE ──
+  h += `<div id="ACT-taux-vente" class="tab-c" style="display:none">
+  <div id="act-vente-content">${buildVenteTable(last8Idxs, last8Weeks)}</div></div>`;
+
+  // ── TAB OCCUPATION ──
+  h += `<div id="ACT-occupation" class="tab-c" style="display:none">
+  <div id="act-occ-content">${buildOccTable(last8Idxs, last8Weeks)}</div></div>`;
+
+  // ── TAB SATISFACTION ──
+  h += `<div id="ACT-satisfaction" class="tab-c" style="display:none">
+  <div id="act-sat-content">${buildSatTable(last8Idxs, last8Weeks)}</div>`;
+  h += `</div>`;
+
+  // ── TAB JOIGNABILITE ──
+  h += `<div id="ACT-joignabilite" class="tab-c" style="display:none">
+  <div id="act-joign-content">${buildJoignTable(last8Idxs, last8Weeks)}</div></div>`;
+
+  // ── TAB CORRELATION ──
+  h += `<div id="ACT-correlation" class="tab-c" style="display:none">
+  <div id="act-corr-content">${buildCorrPanel(0)}</div></div>`;
+
+  return h;
+}
+
+// ── Tables builders (period-aware) ──
+function buildVenteTable(idxs, weeks) {
+  if(!_hebdoData) return '';
+  const h_data = _hebdoData;
+  function pct(v){return v===null?'—':(v*100).toFixed(1)+'%';}
+  function cl(v){return v===null?'':v>=0.2?'c-g':v>=0.1?'c-a':'c-r';}
+  function row(key,name,src,badgeCls,badgeTxt){
+    const d=h_data[src][key]; if(!d) return '';
+    const vals=idxs.map(i=>d.vals[i]);
+    const moy=vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    const meta=getDietMeta(name);
+    return `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:18px;height:18px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700">${meta.ini}</div>
+      ${name}</div></td><td><span class="bdg ${badgeCls}" style="font-size:9px">${badgeTxt}</span></td>
+      ${vals.map(v=>`<td class="${cl(v)}" style="font-family:var(--mono)">${pct(v)}</td>`).join('')}
+      <td class="${cl(moy)}" style="font-family:var(--mono);font-weight:700">${pct(moy)}</td></tr>`;
+  }
+  function totalRow(key,src,label){
+    const d=h_data[src][key]; if(!d) return '';
+    const vals=idxs.map(i=>d.vals[i]);
+    const moy=vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    return `<tr style="font-weight:700;background:var(--color-background-secondary)">
+      <td colspan="2">${label}</td>
+      ${vals.map(v=>`<td style="font-family:var(--mono)">${v!==null?(v*100).toFixed(1)+'%':'—'}</td>`).join('')}
+      <td style="font-family:var(--mono);font-weight:700">${(moy*100).toFixed(1)}%</td></tr>`;
+  }
+  const wh = weeks.map(w=>`<th style="font-size:10px">S${w.week}<span style="opacity:.5;font-size:9px"> ${String(w.year).slice(2)}</span></th>`).join('');
+  return `<div class="ltv-sec"><div class="ltv-hd"><span style="font-weight:700;font-size:12px">Taux de vente — ${weeks.length} semaines</span></div>
+  <div class="tw"><table><thead><tr><th>Diét</th><th>Statut</th>${wh}<th>Moy.</th></tr></thead><tbody>
+  <tr style="background:var(--db-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--db);padding:4px 8px">INTERNES</td></tr>
+  ${row('anaïs','Anaïs','venteInterne','bdg-int','Int.')}
+  ${row('barbara','Barbara','venteInterne','bdg-int','Int.')}
+  ${row('inès','Inès','venteInterne','bdg-int','Int.')}
+  ${row('sophiane','Sophiane','venteInterne','bdg-int','Int.')}
+  ${totalRow('total','venteInterne','TOTAL INTERNE')}
+  <tr style="background:var(--kd-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--kd-d);padding:4px 8px">EXTERNES</td></tr>
+  ${row('amanda','Amanda','venteExterne','bdg-ext','Ext.')}
+  ${row('axelle','Axelle','venteExterne','bdg-ext','Ext.')}
+  ${row('charlotte','Charlotte','venteExterne','bdg-ext','Ext.')}
+  ${row('louise','Louise','venteExterne','bdg-ext','Ext.')}
+  ${row('nathalie','Nathalie','venteExterne','bdg-ext','Ext.')}
+  ${totalRow('total','venteExterne','TOTAL EXTERNE')}
+  ${totalRow('global','venteExterne','🌐 GLOBAL')}
+  </tbody></table></div>
+  <div class="ref-bar">Taux de vente = ventes / RDV effectués · <span class="c-g">≥20%</span> <span class="c-a">≥10%</span> <span class="c-r">&lt;10%</span></div></div>`;
+}
+
+function buildOccTable(idxs, weeks) {
+  if(!_hebdoData) return '';
+  const h_data=_hebdoData;
+  function pct(v){return v===null?'—':(v*100).toFixed(1)+'%';}
+  function cl(v){return v===null?'':v>=0.85?'c-g':v>=0.7?'c-a':'c-r';}
+  function row(key,name){
+    const d=h_data.occupation[key]; if(!d) return '';
+    const vals=idxs.map(i=>d.vals[i]);
+    const moy=vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    const meta=getDietMeta(name);
+    return `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:18px;height:18px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700">${meta.ini}</div>
+      ${name}</div></td>
+      ${vals.map(v=>`<td class="${cl(v)}" style="font-family:var(--mono)">${pct(v)}</td>`).join('')}
+      <td class="${cl(moy)}" style="font-family:var(--mono);font-weight:700">${pct(moy)}</td></tr>`;
+  }
+  const wh=weeks.map(w=>`<th style="font-size:10px">S${w.week}<span style="opacity:.5;font-size:9px"> ${String(w.year).slice(2)}</span></th>`).join('');
+  return `<div class="ltv-sec"><div class="ltv-hd"><span style="font-weight:700;font-size:12px">Taux d'occupation (internes) — ${weeks.length} semaines</span></div>
+  <div class="tw"><table><thead><tr><th>Diét</th>${wh}<th>Moy.</th></tr></thead><tbody>
+  ${row('anaïs','Anaïs')}${row('barbara','Barbara')}${row('inès','Inès')}${row('sophiane','Sophiane')}
+  </tbody></table></div>
+  <div class="ref-bar"><span class="c-g">≥85%</span> <span class="c-a">≥70%</span> <span class="c-r">&lt;70%</span></div></div>`;
+}
+
+function buildSatTable(idxs, weeks) {
+  if(!_hebdoData) return '';
+  const h_data=_hebdoData;
+  function fmt(v){return v===null?'—':v.toFixed(1);}
+  function cl(v){return v===null?'':v>=9?'c-g':v>=8?'c-a':'c-r';}
+  function row(key,name,src,badgeCls,badgeTxt){
+    const d=h_data[src][key]; if(!d) return '';
+    const vals=idxs.map(i=>d.vals[i]);
+    const moy=vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    const meta=getDietMeta(name);
+    return `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:18px;height:18px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700">${meta.ini}</div>
+      ${name}</div></td><td><span class="bdg ${badgeCls}" style="font-size:9px">${badgeTxt}</span></td>
+      ${vals.map(v=>`<td class="${cl(v)}" style="font-family:var(--mono)">${fmt(v)}</td>`).join('')}
+      <td class="${cl(moy)}" style="font-family:var(--mono);font-weight:700">${fmt(moy)}</td></tr>`;
+  }
+  const wh=weeks.map(w=>`<th style="font-size:10px">S${w.week}<span style="opacity:.5;font-size:9px"> ${String(w.year).slice(2)}</span></th>`).join('');
+  return `<div class="ltv-sec"><div class="ltv-hd"><span style="font-weight:700;font-size:12px">Note client /10 — ${weeks.length} semaines</span></div>
+  <div class="tw"><table><thead><tr><th>Diét</th><th>Statut</th>${wh}<th>Moy.</th></tr></thead><tbody>
+  <tr style="background:var(--db-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--db);padding:4px 8px">INTERNES</td></tr>
+  ${row('inès','Inès','noteInterne','bdg-int','Int.')}${row('sophiane','Sophiane','noteInterne','bdg-int','Int.')}
+  <tr style="background:var(--kd-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--kd-d);padding:4px 8px">EXTERNES</td></tr>
+  ${row('amanda','Amanda','noteExterne','bdg-ext','Ext.')}${row('axelle','Axelle','noteExterne','bdg-ext','Ext.')}
+  ${row('charlotte','Charlotte','noteExterne','bdg-ext','Ext.')}${row('louise','Louise','noteExterne','bdg-ext','Ext.')}
+  ${row('nathalie','Nathalie','noteExterne','bdg-ext','Ext.')}
+  </tbody></table></div>
+  <div class="ref-bar"><span class="c-g">≥9.0/10</span> <span class="c-a">≥8.0/10</span> <span class="c-r">&lt;8.0/10</span></div></div>`;
+}
+
+function buildJoignTable(idxs, weeks) {
+  if(!_hebdoData) return '';
+  const h_data=_hebdoData;
+  function pct(v){return v===null?'—':(v*100).toFixed(1)+'%';}
+  function cl(v){return v===null?'':v>=0.85?'c-g':v>=0.7?'c-a':'c-r';}
+  function row(key,name,src,badgeCls,badgeTxt){
+    const d=h_data[src][key]; if(!d) return '';
+    const vals=idxs.map(i=>d.vals[i]);
+    const moy=vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    const meta=getDietMeta(name);
+    return `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:18px;height:18px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700">${meta.ini}</div>
+      ${name}</div></td><td><span class="bdg ${badgeCls}" style="font-size:9px">${badgeTxt}</span></td>
+      ${vals.map(v=>`<td class="${cl(v)}" style="font-family:var(--mono)">${pct(v)}</td>`).join('')}
+      <td class="${cl(moy)}" style="font-family:var(--mono);font-weight:700">${pct(moy)}</td></tr>`;
+  }
+  const wh=weeks.map(w=>`<th style="font-size:10px">S${w.week}<span style="opacity:.5;font-size:9px"> ${String(w.year).slice(2)}</span></th>`).join('');
+  return `<div class="ltv-sec"><div class="ltv-hd"><span style="font-weight:700;font-size:12px">Taux de joignabilité — ${weeks.length} semaines</span></div>
+  <div class="tw"><table><thead><tr><th>Diét</th><th>Statut</th>${wh}<th>Moy.</th></tr></thead><tbody>
+  <tr style="background:var(--db-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--db);padding:4px 8px">INTERNES</td></tr>
+  ${row('anaïs','Anaïs','joignInterne','bdg-int','Int.')}${row('inès','Inès','joignInterne','bdg-int','Int.')}${row('sophiane','Sophiane','joignInterne','bdg-int','Int.')}
+  <tr style="background:var(--kd-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--kd-d);padding:4px 8px">EXTERNES</td></tr>
+  ${row('amanda','Amanda','joignExterne','bdg-ext','Ext.')}${row('axelle','Axelle','joignExterne','bdg-ext','Ext.')}
+  ${row('charlotte','Charlotte','joignExterne','bdg-ext','Ext.')}${row('louise','Louise','joignExterne','bdg-ext','Ext.')}
+  ${row('nathalie','Nathalie','joignExterne','bdg-ext','Ext.')}
+  </tbody></table></div>
+  <div class="ref-bar">Joignabilité = appels aboutis / appels tentés · <span class="c-g">≥85%</span> <span class="c-a">≥70%</span> <span class="c-r">&lt;70%</span></div></div>`;
+}
+
+function buildCorrPanel(pi) {
+  if(!_hebdoData) return '<div style="padding:20px;color:var(--color-text-secondary)">Données hebdo non disponibles</div>';
+  const periodStr = P[pi] ? P[pi].replace('–','/').replace(' ','_') : '';
+  // Reconstruct the original period string from P label
+  // P[pi] is like "Nov–Jan 2026" → need to map back to "11/25 à 01/26"
+  // We use the weeksForPeriod with a simpler approach: find weeks by months
+  const corrData = computeCorrelation(diets, _hebdoData, pi);
+  
+  let h = `<div class="ltv-sec">
+  <div class="ltv-hd"><span style="font-weight:700;font-size:12px">Corrélation Taux de vente ↔ Marge — ${P[pi]||'Période actuelle'}</span></div>`;
+
+  if(!corrData || !corrData.results.length) {
+    return h + '<div style="padding:20px;color:var(--color-text-secondary);text-align:center">Pas assez de données pour cette période</div></div>';
+  }
+
+  const {results, corr} = corrData;
+
+  // Correlation interpretation
+  const corrAbs = Math.abs(corr||0);
+  const corrColor = corrAbs >= 0.7 ? '#16a34a' : corrAbs >= 0.4 ? '#d97706' : '#6b7280';
+  const corrLabel = corrAbs >= 0.7 ? 'Corrélation forte' : corrAbs >= 0.4 ? 'Corrélation modérée' : 'Corrélation faible';
+
+  if(corr !== null) {
+    h += `<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+      <div class="kpi-c" style="flex:1;min-width:140px">
+        <div class="kpi-lbl">Coefficient de corrélation (r)</div>
+        <div class="kpi-val" style="color:${corrColor}">${corr.toFixed(2)}</div>
+        <div class="kpi-sub">${corrLabel} · ${results.length} diéts</div>
+      </div>
+      <div class="kpi-c" style="flex:2;min-width:200px">
+        <div class="kpi-lbl">Interprétation</div>
+        <div style="font-size:13px;color:var(--color-text-primary);line-height:1.6;margin-top:4px">
+          ${corrAbs >= 0.7 ? `<strong>Lien significatif</strong> : les diéts qui ont le meilleur taux de vente sur la période tendent à générer une marge par client plus élevée. L'impact du suivi commercial sur la qualité du recrutement est mesurable.` :
+            corrAbs >= 0.4 ? `<strong>Lien partiel</strong> : le taux de vente explique une partie de la marge, mais d'autres facteurs jouent (qualité du suivi post-vente, mix produit, profil client).` :
+            `<strong>Lien non établi</strong> sur cette période. La marge ne suit pas le taux de vente — le profil client recruté et la qualité du suivi post-achat sont probablement plus déterminants.`}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Scatter table
+  h += `<div class="tw"><table>
+  <thead><tr>
+    <th>Diét</th><th>Statut</th>
+    <th>Taux de vente moy.<br><span style="font-weight:400;font-size:10px">sur la période</span></th>
+    <th>Marge/client<br><span style="font-weight:400;font-size:10px">cohorte DB</span></th>
+    <th>× vs hors-suivi<br><span style="font-weight:400;font-size:10px">même cohorte</span></th>
+    <th>Semaines<br><span style="font-weight:400;font-size:10px">observées</span></th>
+    <th>Signal</th>
+  </tr></thead><tbody>`;
+
+  // Compute team averages for reference
+  const avgV = results.reduce((a,r)=>a+r.avgVente,0)/results.length;
+  const avgM = results.reduce((a,r)=>a+r.marge,0)/results.length;
+
+  results.forEach(r => {
+    const vAbove = r.avgVente >= avgV;
+    const mAbove = r.marge >= avgM;
+    let signal, sigColor;
+    if(vAbove && mAbove)      { signal='↑ Vente forte → Marge forte'; sigColor='#16a34a'; }
+    else if(!vAbove && !mAbove){ signal='↓ Vente faible → Marge faible'; sigColor='#dc2626'; }
+    else if(vAbove && !mAbove) { signal='⚠ Vente forte, marge décevante'; sigColor='#d97706'; }
+    else                       { signal='◇ Vente faible, marge correcte'; sigColor='#6b7280'; }
+
+    const vcl = r.avgVente>=0.2?'c-g':r.avgVente>=0.1?'c-a':'c-r';
+    const mcl = r.marge>=avgM?'c-g':'c-r';
+    h += `<tr>
+      <td><div style="display:flex;align-items:center;gap:5px">
+        <div style="width:20px;height:20px;border-radius:50%;background:${r.meta.bg};color:${r.meta.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${r.meta.ini}</div>
+        ${r.name}</div></td>
+      <td><span class="bdg ${r.status==='int'?'bdg-int':'bdg-ext'}" style="font-size:9px">${r.status==='int'?'Int.':'Ext.'}</span></td>
+      <td class="${vcl}" style="font-family:var(--mono);font-weight:600">${(r.avgVente*100).toFixed(1)}%</td>
+      <td class="${mcl}" style="font-family:var(--mono)">${r.marge.toLocaleString('fr-FR')} €</td>
+      <td class="${r.mvsDB>=1.3?'c-g':r.mvsDB>=1.1?'c-a':'c-r'}" style="font-family:var(--mono)">×${r.mvsDB.toFixed(2)}</td>
+      <td style="font-family:var(--mono);color:var(--color-text-secondary)">${r.weeks}</td>
+      <td style="font-size:11px;font-weight:600;color:${sigColor}">${signal}</td>
+    </tr>`;
+  });
+
+  h += `</tbody></table></div>
+  <div class="ref-bar">Taux de vente moy. = moyenne des semaines de la période de recrutement · Marge = cohorte la plus récente correspondante · <strong>r = ${corr!==null?corr.toFixed(2):'n/a'}</strong></div>
+  </div>`;
+  return h;
+}
+
+// Period selector for activity panel
+let _actPeriodIdx = 0;
+function setActPeriod(pi) {
+  _actPeriodIdx = pi;
+  if(!_hebdoData) return;
+  
+  // Get weeks for this period
+  const rawPeriod = _getRawPeriod(pi);
+  const periodWks = rawPeriod ? _hebdoData.weeksForPeriod(rawPeriod) : _hebdoData.weekMap.slice(-8);
+  const idxs = periodWks.map(w => _hebdoData.weekMap.findIndex(wm=>wm.col===w.col)).filter(i=>i>=0);
+  const wks  = idxs.map(i=>_hebdoData.weekMap[i]);
+
+  // Update button states
+  document.querySelectorAll('[data-act-period]').forEach(b=>{
+    b.classList.toggle('on', parseInt(b.dataset.actPeriod)===pi);
+  });
+
+  // Rebuild period-dependent tab contents
+  const ve=document.getElementById('act-vente-content');
+  const oc=document.getElementById('act-occ-content');
+  const sa=document.getElementById('act-sat-content');
+  const jo=document.getElementById('act-joign-content');
+  const co=document.getElementById('act-corr-content');
+  if(ve) ve.innerHTML = buildVenteTable(idxs,wks);
+  if(oc) oc.innerHTML = buildOccTable(idxs,wks);
+  if(sa) sa.innerHTML = buildSatTable(idxs,wks);
+  if(jo) jo.innerHTML = buildJoignTable(idxs,wks);
+  if(co) co.innerHTML = buildCorrPanel(pi);
+}
+
+// Map P[i] label back to raw period string for weeksForPeriod
+function _getRawPeriod(pi) {
+  // P[pi] is like "Nov–Jan 2026" → convert to "11/25 à 01/26"
+  const months = {jan:1,fév:2,mar:3,avr:4,mai:5,jun:6,jul:7,aoû:8,sep:9,oct:10,nov:11,déc:12};
+  const lbl = P[pi];
+  if(!lbl) return null;
+  const m = lbl.match(/([A-Za-zéû]+)[\s–-]+([A-Za-zéû]+)\s+(\d{4})/i);
+  if(!m) return null;
+  const endM = months[m[2].toLowerCase().slice(0,3)];
+  const startM = months[m[1].toLowerCase().slice(0,3)];
+  const endY = parseInt(m[3]);
+  const startY = startM > endM ? endY - 1 : endY;
+  const fmt = (m,y) => (m<10?'0':'')+m+'/'+String(y).slice(2);
+  return fmt(startM,startY)+' à '+fmt(endM,endY);
+}
+
+
+function switchLTVPeriod(pi){
+  document.getElementById('ltv-content').innerHTML = buildGlobalLTVForPeriod(pi);
+  document.getElementById('ltv-period-sub').textContent = 'Ratio Marge Diet / Marge hors-suivi · ' + P[pi] + ' · DB & KD';
+  document.querySelectorAll('[data-ltv-pi]').forEach(b=>{
+    b.classList.toggle('on', parseInt(b.dataset.ltvPi)===pi);
+  });
+}
+
+const nav=document.getElementById('nav'), panels=document.getElementById('panels');
+
+const _navItems=[];
+function activateNav(pid){
+  _navItems.forEach(x=>x.btn.classList.toggle('on', x.pid===pid));
+  document.querySelectorAll('#panels>.panel').forEach(p=>p.classList.toggle('on', p.id===pid));
+}
+function addNav(btn, pid, html){
+  _navItems.push({btn,pid});
+  btn.onclick=()=>activateNav(pid);
+  nav.appendChild(btn);
+  const p=document.createElement('div'); p.className='panel'; p.id=pid; p.innerHTML=html;
+  panels.appendChild(p);
+}
+
+// ══════════════════════════════════════════════
+// STATIC CONFIG — couleurs, labels, textes analyse
+// (ne change pas selon les données)
+// ══════════════════════════════════════════════
+// Known diet metadata — new diets detected in sheet get auto-generated defaults
+const DIET_META_KNOWN = {
+  'Amanda':   {ini:'AM',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Axelle':   {ini:'AX',bg:'#EEF9D0',fg:'#3D5A12',ring:'#CAEA82',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Barbara':  {ini:'BA',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'int',slabel:'Interne · 35h/sem.'},
+  'Charlotte':{ini:'CH',bg:'#FEF3C7',fg:'#92400E',ring:'#FDE68A',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Inès':     {ini:'IN',bg:'#EEF9D0',fg:'#3D5A12',ring:'#CAEA82',status:'int',slabel:'Interne · 27h/sem.'},
+  'Louise':   {ini:'LO',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Nathalie': {ini:'NA',bg:'#FEE2E2',fg:'#991B1B',ring:'#FCA5A5',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Rose':     {ini:'RO',bg:'#EEF9D0',fg:'#3D5A12',ring:'#CAEA82',status:'ext',slabel:'Externe · ~10h/sem.'},
+  'Sophiane': {ini:'SO',bg:'#EDE0FF',fg:'#5B0F9E',ring:'#C9A8F5',status:'int',slabel:'Interne · 35h (50% management)'},
+  'Anais':    {ini:'AN',bg:'#FFF3E0',fg:'#E65100',ring:'#FFCC80',status:'int',slabel:'Interne · 35h/sem.'},
+  'Mathilde': {ini:'MA',bg:'#E8EAF6',fg:'#283593',ring:'#9FA8DA',status:'ext',slabel:'Externe · ~10h/sem.'},
+};
+// Color palette for auto-generated new diets
+const AUTO_PALETTE = [
+  {bg:'#E8F5E9',fg:'#1B5E20',ring:'#A5D6A7'},
+  {bg:'#E3F2FD',fg:'#0D47A1',ring:'#90CAF9'},
+  {bg:'#FCE4EC',fg:'#880E4F',ring:'#F48FB1'},
+  {bg:'#F3E5F5',fg:'#4A148C',ring:'#CE93D8'},
+  {bg:'#E0F7FA',fg:'#006064',ring:'#80DEEA'},
+];
+let _autoPaletteIdx = 0;
+
+function getDietMeta(name) {
+  if (DIET_META_KNOWN[name]) return DIET_META_KNOWN[name];
+  // Auto-generate for unknown diets
+  const pal = AUTO_PALETTE[_autoPaletteIdx % AUTO_PALETTE.length];
+  _autoPaletteIdx++;
+  const ini = name.slice(0,2).toUpperCase();
+  return {ini, ...pal, status:'ext', slabel:'Externe'};
+}
+// Build DIET_META dynamically — will be updated from sheet data
+let DIET_META = {...DIET_META_KNOWN};
+
+// ══════════════════════════════════════════════
+// FETCH GOOGLE SHEETS DATA
+// ══════════════════════════════════════════════
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxRl4Z1ggdM3n5vuDab68DWHGn8Ee_DJ1-F_gEEXuh83yaPTqZqRNOwQzFN0Lc3xSRMeg/exec';
+
+function setStatus(msg) {
+  const el = document.getElementById('load-status');
+  if(el) el.textContent = msg;
+}
+
+function hideLoading() {
+  const el = document.getElementById('loading-overlay');
+  if(el) el.style.display = 'none';
+}
+
+function showError(msg) {
+  const el = document.getElementById('loading-overlay');
+  if(el) el.innerHTML = `<div style="text-align:center;padding:40px;font-family:'DM Sans',sans-serif">
+    <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+    <div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:8px">Impossible de charger les données</div>
+    <div style="font-size:13px;color:#6B7280;max-width:400px">${msg}</div>
+    <button onclick="location.reload()" style="margin-top:20px;padding:8px 20px;border-radius:8px;border:1.5px solid #5B0F9E;background:#EDE0FF;color:#5B0F9E;font-weight:600;cursor:pointer">Réessayer</button>
+  </div>`;
+}
+
+// Parse the raw 2D array from Apps Script into structured data
+function parseSheetData(rows) {
+  setStatus('Analyse de la structure…');
+
+  // ── Find header row (row 2 in sheet = index 1) ──
+  // Header row has: col0=Marque, col1=Catégorie, col2=Diet, col3=empty, col4+=periods
+  let headerRow = -1;
+  let periodCols = []; // {col, label}
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (String(r[0]||'').trim()==='Marque' || String(r[1]||'').trim()==='Catégorie') {
+      headerRow = i;
+      // Start from col 3 (D) since user inserts new periods in column D
+      for (let c = 3; c < r.length; c++) {
+        const lbl = String(r[c]||'').trim();
+        if (lbl && lbl.includes('/') && lbl.length > 3) periodCols.push({col:c, label:lbl});
+      }
+      break;
+    }
+    // Also try row 1 pattern: check if row 0 has dates and row 1 has string labels
+    if (i === 1 && String(r[0]||'').trim()==='DB') {
+      // Header is row before this one
+      headerRow = 0;
+      const prevRow = rows[0];
+      for (let c = 4; c < prevRow.length; c++) {
+        const v = prevRow[c];
+        if (v) {
+          // Could be a date object or string like "10/25 à 12/25"
+          const lbl = v instanceof Date
+            ? formatDatePeriod(v)
+            : String(v).trim();
+          if (lbl) periodCols.push({col:c, label:lbl});
+        }
+      }
+      break;
+    }
+  }
+
+  // Fallback: scan for first row with period-like content in col 4
+  if (headerRow === -1) {
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const r = rows[i];
+      if (r[4] && (String(r[4]).includes('/') || r[4] instanceof Date)) {
+        headerRow = i;
+        for (let c = 4; c < r.length; c++) {
+          if (r[c]) {
+            const lbl = r[c] instanceof Date ? formatDatePeriod(r[c]) : String(r[c]).trim();
+            if (lbl) periodCols.push({col:c, label:lbl});
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  if (periodCols.length === 0) {
+    // Last resort: try to find period info in row 0 (dates) or row 1 (text)
+    for (let c = 3; c < (rows[0]||[]).length; c++) {
+      const v0 = rows[0][c], v1 = (rows[1]||[])[c];
+      const v = v0 || v1;
+      if (v) {
+        const lbl = v instanceof Date ? formatDatePeriod(v) : String(v).trim();
+        if (lbl && lbl !== '') periodCols.push({col:c, label:lbl});
+      }
+    }
+  }
+
+  if (periodCols.length === 0) throw new Error('Aucune période trouvée dans le sheet. Vérifier que la ligne 2 contient les libellés de période (ex: "10/25 à 12/25").');
+
+  // Format period labels
+  function formatDatePeriod(d) {
+    if (!d) return '';
+    const months=['','Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    if (d instanceof Date) {
+      return months[d.getMonth()+1] + ' ' + String(d.getFullYear()).slice(2);
+    }
+    const s = String(d).trim();
+    // Handle "11/25 à 01/2026" or "11/25 à 01/26"
+    // Format: startMonth/startYear à endMonth/endYear
+    const m = s.match(/(\d+)\/(\d+)\s*[àa]\s*(\d+)\/(\d+)/);
+    if (m) {
+      const startMonth = parseInt(m[1]);
+      const endMonth   = parseInt(m[3]);
+      const endYearRaw = m[4];
+      // Use END year for the label (more meaningful for cross-year periods)
+      const endYear = endYearRaw.length === 4 ? parseInt(endYearRaw) : 2000 + parseInt(endYearRaw);
+      return months[startMonth] + '–' + months[endMonth] + ' ' + endYear;
+    }
+    // Handle single "10/25"
+    const m2 = s.match(/(\d+)\/(\d+)/);
+    if (m2) return months[parseInt(m2[1])] + ' ' + (2000+parseInt(m2[2]));
+    return s;
+  }
+
+  // Sort periods newest-first by converting labels to sortable dates
+  // Column order in sheet: D=newest, E, F, G, H=oldest
+  // Since we read left to right from col 4, order is already newest first
+  const periodLabels = periodCols.map(p => formatDatePeriod(p.label)||String(p.label));
+  const nPeriods = periodCols.length;
+  
+  console.log('Périodes détectées:', periodLabels);
+
+  setStatus(`${nPeriods} période(s) détectée(s)…`);
+
+  // ── Build lookup from all data rows ──
+  // key: "MARQUE|CATEGORIE|DIET" → array of values per period
+  const lookup = {};
+  const dataStart = headerRow + 1;
+
+  for (let i = dataStart; i < rows.length; i++) {
+    const r = rows[i];
+    const marque = String(r[0]||'').trim();
+    const cat    = String(r[1]||'').trim();
+    const rawDiet = r[2];
+    if (typeof rawDiet === 'number') continue;  // skip numeric rows
+    const diet   = String(rawDiet||'').trim().toLowerCase();
+    if (!marque || !cat) continue;
+    if (/^\d/.test(diet)) continue;  // skip rows starting with digit
+
+    const key = marque + '|' + cat + '|' + (diet||'all');
+    const vals = periodCols.map(p => {
+      const v = r[p.col];
+      if (v === null || v === undefined || v === '' || v === 0) return null;
+      const n = parseFloat(v);
+      return isNaN(n) ? null : n;
+    });
+    lookup[key] = vals;
+  }
+
+  function get(marque, cat, diet) {
+    const key = marque + '|' + cat + '|' + (diet||'all').toLowerCase();
+    return lookup[key] || Array(nPeriods).fill(0);
+  }
+
+  function getNonNull(marque, cat, diet) {
+    const v = get(marque, cat, diet);
+    return v.map(x => x === null ? 0 : x);
+  }
+
+  // ── ALL data ──
+  const maSuDB_ = getNonNull('DB','Marge Avec suivi','all');
+  const maSuKD_ = getNonNull('KD','Marge Avec suivi','all');
+  const maSnDB_ = getNonNull('DB','Marge Sans suivi','all');
+  const maSnKD_ = getNonNull('KD','Marge Sans suivi','all');
+  const maAllDB_ = getNonNull('DB','Marge','all');   // marge ALL clients (avec + sans)
+  const maAllKD_ = getNonNull('KD','Marge','all');   // marge ALL clients (avec + sans)
+
+  const newAllData = {
+    margeDB:  maSuDB_.map((v,i) => maSnDB_[i] ? parseFloat((v/maSnDB_[i]).toFixed(4)) : 0),
+    margeKD:  maSuKD_.map((v,i) => maSnKD_[i] ? parseFloat((v/maSnKD_[i]).toFixed(4)) : 0),
+    // Marge Diet Vs ALL = marge avec suivi / marge ALL (tous clients)
+    vsAllDB:  maSuDB_.map((v,i) => maAllDB_[i] ? parseFloat((v/maAllDB_[i]).toFixed(4)) : 0),
+    vsAllKD:  maSuKD_.map((v,i) => maAllKD_[i] ? parseFloat((v/maAllKD_[i]).toFixed(4)) : 0),
+    totCDB:   getNonNull('DB','Clients recrutés','all'),
+    totCKD:   getNonNull('KD','Clients recrutés','all'),
+    maSuDB:   maSuDB_,
+    maSuKD:   maSuKD_,
+    maSnDB:   maSnDB_,
+    maSnKD:   maSnKD_,
+    maAllDB:  maAllDB_,
+    maAllKD:  maAllKD_,
+  };
+
+  // ── REF from most recent period (index 0 = newest column) ──
+  const newREF = {
+    DB:  { sans: newAllData.maSnDB[0]||447,  suivi: newAllData.maSuDB[0]||586 },
+    KD:  { sans: newAllData.maSnKD[0]||306,  suivi: newAllData.maSuKD[0]||620 },
+    TOT: { sans: getNonNull('TOTAL','Marge Sans suivi','all')[0]||400,
+           suivi: getNonNull('TOTAL','Marge Avec suivi','all')[0]||591 }
+  };
+
+  // Moy equipe per period
+  const moyDB  = newAllData.maSuDB;
+  const moyKD  = newAllData.maSuKD;
+  const moyTOT = getNonNull('TOTAL','Marge Avec suivi','all');
+
+  // ── Auto-detect all diet names from sheet ──
+  const detectedDiets = new Set();
+  for (let i = dataStart; i < rows.length; i++) {
+    const raw = rows[i][2];
+    // Skip numeric values, empty, 'all', 'Diet' header
+    if (raw === null || raw === undefined) continue;
+    if (typeof raw === 'number') continue;  // excludes 1017, 363, etc.
+    const diet = String(raw).trim();
+    if (!diet || diet.toLowerCase() === 'all' || diet.toLowerCase() === 'diet') continue;
+    if (/^\d/.test(diet)) continue;  // starts with digit = not a name
+    // Capitalize first letter to normalize
+    const normalized = diet.charAt(0).toUpperCase() + diet.slice(1);
+    detectedDiets.add(normalized);
+  }
+  // Update DIET_META with any new diets from sheet
+  detectedDiets.forEach(name => {
+    if (!DIET_META[name]) {
+      DIET_META[name] = getDietMeta(name);
+    }
+  });
+
+  // ── Build diets ──
+  const dietNames = [...detectedDiets].sort();
+  const newDiets = [];
+
+  setStatus(`${dietNames.length} diéts détectées…`);
+
+  for (const name of dietNames) {
+    const meta = getDietMeta(name);
+    const dKey = name.toLowerCase();
+
+    const mDB  = getNonNull('DB','Marge',dKey);
+    const mKD  = getNonNull('KD','Marge',dKey);
+    const mTOT = getNonNull('TOTAL','Marge',dKey);
+    const cDB  = getNonNull('DB','Clients recrutés',dKey);
+    const cKD  = getNonNull('KD','Clients recrutés',dKey);
+
+    // Pool = clients diet / clients total ALL
+    const totCDB = getNonNull('DB','Clients recrutés','all');
+    const totCKD = getNonNull('KD','Clients recrutés','all');
+    const totCTOT= getNonNull('TOTAL','Clients recrutés','all');
+    const poolDB  = cDB.map((v,i)  => totCDB[i]  ? parseFloat((v/totCDB[i]*100).toFixed(2))  : 0);
+    const poolKD  = cKD.map((v,i)  => totCKD[i]  ? parseFloat((v/totCKD[i]*100).toFixed(2))  : 0);
+
+    // Marge Diet Vs hors suivi — try to read from sheet first, calculate fallback
+    let mvsDB  = get('DB','Marge Diet Vs Marge hors suivi',dKey);
+    let mvsKD  = get('KD','Marge Diet Vs Marge hors suivi',dKey);
+    let mvsTOT = get('TOTAL','Marge Diet Vs Marge hors suivi',dKey);
+
+    // If sheet values are 0 or null (formulas not evaluated), compute manually
+    mvsDB  = mvsDB.map((v,i)  => (v && v>0) ? v : (newAllData.maSnDB[i]  ? parseFloat((mDB[i]/newAllData.maSnDB[i]).toFixed(4))  : 0));
+    mvsKD  = mvsKD.map((v,i)  => (v && v>0) ? v : (newAllData.maSnKD[i]  ? parseFloat((mKD[i]/newAllData.maSnKD[i]).toFixed(4))  : 0));
+    mvsTOT = mvsTOT.map((v,i) => (v && v>0) ? v : (newREF.TOT.sans       ? parseFloat((mTOT[i]/newREF.TOT.sans).toFixed(4))       : 0));
+
+    // Ratios vs moy equipe
+    const ratioMoyDB  = mDB.map((v,i)  => moyDB[i]  ? parseFloat((v/moyDB[i]).toFixed(4))  : 0);
+    const ratioMoyKD  = mKD.map((v,i)  => moyKD[i]  ? parseFloat((v/moyKD[i]).toFixed(4))  : 0);
+    const ratioMoyTOT = mTOT.map((v,i) => moyTOT[i] ? parseFloat((v/moyTOT[i]).toFixed(4)) : 0);
+
+    newDiets.push({
+      name, ...getDietMeta(name),
+      summary: `Données live · ${periodLabels[0]}`,
+      margeDB:  ratioMoyDB.map(v=>({v,r:0})),
+      margeKD:  ratioMoyKD.map(v=>({v,r:0})),
+      margeTOT: ratioMoyTOT.map(v=>({v,r:0})),
+      mvsDB, mvsKD, mvsTOT,
+      mDB, mKD, mTOT,
+      poolDB, poolKD, cDB, cKD,
+      m0DB: mDB[0]||0, m0KD: mKD[0]||0, m0TOT: mTOT[0]||0,
+      atot: `<strong>${name}</strong> — marge TOTAL : <strong>${(mTOT[0]||0).toLocaleString('fr-FR')} €</strong> · période ${periodLabels[0]}.`,
+      adb:  `Sur <strong>Dietbon</strong>, ${name} génère <strong>${(mDB[0]||0).toLocaleString('fr-FR')} €</strong> de marge par client · ×${(mvsDB[0]||0).toFixed(2)} vs hors-suivi · ${cDB[0]||0} clients.`,
+      akd:  `Sur <strong>KitchenDiet</strong>, ${name} génère <strong>${(mKD[0]||0).toLocaleString('fr-FR')} €</strong> de marge par client · ×${(mvsKD[0]||0).toFixed(2)} vs hors-suivi · ${cKD[0]||0} clients.`,
+      verdict: `Données mises à jour automatiquement depuis Google Sheets · ${new Date().toLocaleDateString('fr-FR')}.`
+    });
+  }
+
+  // ── Compute ranks per period ──
+  for (let pi = 0; pi < nPeriods; pi++) {
+    ['DB','KD','TOT'].forEach(brand => {
+      const key = 'marge'+brand;
+      const mKey = brand==='DB'?'mDB':brand==='KD'?'mKD':'mTOT';
+      const sorted = [...newDiets].sort((a,b) => (b[mKey][pi]||0)-(a[mKey][pi]||0));
+      sorted.forEach((d,i) => {
+        const dd = newDiets.find(x=>x.name===d.name);
+        dd[key][pi].r = i+1;
+      });
+    });
+  }
+
+  return { newAllData, newREF, newDiets, periodLabels };
+}
+
+
+// ══════════════════════════════════════════════
+// PARSE KPI HEBDO SHEET
+// ══════════════════════════════════════════════
+function parseHebdoData(rows) {
+  if(!rows || rows.length < 10) return null;
+
+  // ── Build week map from anchor date ──
+  // Anchor: col 7 (idx 7) = week 14 of 2025 = 31/03/2025
+  // Row 5 (idx 4) has week numbers, cols starting at idx 3
+  const weekRow = rows[4] || [];
+  const ANCHOR_COL = 7;
+  const ANCHOR_DATE = new Date(2025, 2, 31); // 31 March 2025
+
+  const weekMap = []; // {col, week, year, date, label}
+  for(let i = 3; i < weekRow.length; i++) {
+    const v = weekRow[i];
+    if(v === null || v === undefined || v === '') continue;
+    const wn = parseFloat(v);
+    if(isNaN(wn)) continue;
+    const weekNum = Math.round(wn);
+    // Calculate date from anchor
+    const msOffset = (i - ANCHOR_COL) * 7 * 24 * 3600 * 1000;
+    const d = new Date(ANCHOR_DATE.getTime() + msOffset);
+    let yr = d.getFullYear();
+    // Cross-year fix
+    if(d.getMonth() === 0 && weekNum > 50) yr--;
+    else if(d.getMonth() === 11 && weekNum < 5) yr++;
+    weekMap.push({col:i, week:weekNum, year:yr, date:d,
+      label: yr+'-S'+(weekNum<10?'0':'')+weekNum});
+  }
+
+  if(weekMap.length === 0) return null;
+
+  // ── Period → weeks mapping ──
+  // Given period string "11/25 à 01/26", find all weekMap entries whose date falls in those months
+  function weeksForPeriod(periodStr) {
+    if(!periodStr) return [];
+    const m = String(periodStr).match(/(\d+)\/(\d+)\s*[àa]\s*(\d+)\/(\d+)/);
+    if(!m) return [];
+    const sm = parseInt(m[1]), sy = 2000+parseInt(m[2]);
+    const em = parseInt(m[3]), ey = 2000+parseInt(m[4]);
+    const startD = new Date(sy, sm-1, 1);
+    const endD   = new Date(ey, em, 0); // last day of end month
+    return weekMap.filter(w => w.date >= startD && w.date <= endD);
+  }
+
+  // Build period→weeks lookup (populated when LTV periods are known)
+  const periodWeeks = {}; // "11/25 à 01/26" → [{col, week, year, ...}]
+
+  // Helper: safe numeric
+  function num(v) {
+    if(v === null || v === undefined || v === '' || String(v).includes('DIV') || String(v).includes('REF')) return null;
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  }
+
+  // ── Extract section: name→{name, vals[], weeks[]} ──
+  function extractSection(rowDefs) {
+    const result = {};
+    rowDefs.forEach(({name, rowIdx}) => {
+      if(rowIdx >= rows.length) return;
+      const row = rows[rowIdx] || [];
+      const vals = weekMap.map(w => num(row[w.col]));
+      result[name.toLowerCase()] = {
+        name, 
+        vals,                          // parallel to weekMap
+        weeks: weekMap.map(w=>w.week),
+        years: weekMap.map(w=>w.year),
+        labels: weekMap.map(w=>w.label)
+      };
+    });
+    return result;
+  }
+
+  // ── TAUX DE VENTE (rows 173-193, idx 172-192) ──
+  const venteInterne = extractSection([
+    {name:'Anaïs',    rowIdx:174},
+    {name:'Barbara',  rowIdx:175},
+    {name:'Inès',     rowIdx:177},
+    {name:'Sophiane', rowIdx:180},
+    {name:'TOTAL',    rowIdx:182},
+  ]);
+  const venteExterne = extractSection([
+    {name:'Amanda',   rowIdx:184},
+    {name:'Axelle',   rowIdx:185},
+    {name:'Charlotte',rowIdx:186},
+    {name:'Louise',   rowIdx:188},
+    {name:'Nathalie', rowIdx:190},
+    {name:'TOTAL',    rowIdx:191},
+    {name:'GLOBAL',   rowIdx:192},
+  ]);
+
+  // ── TAUX D'OCCUPATION (rows 36-46, idx 35-45) ──
+  const occupation = extractSection([
+    {name:'Anaïs',    rowIdx:37},
+    {name:'Barbara',  rowIdx:38},
+    {name:'Inès',     rowIdx:40},
+    {name:'Sophiane', rowIdx:43},
+    {name:'TOTAL',    rowIdx:45},
+  ]);
+
+  // ── TAUX REMPLISSAGE AGENDA (rows 48-58, idx 47-57) ──
+  const remplissage = extractSection([
+    {name:'Anaïs',    rowIdx:49},
+    {name:'Barbara',  rowIdx:50},
+    {name:'Inès',     rowIdx:52},
+    {name:'Sophiane', rowIdx:55},
+    {name:'TOTAL',    rowIdx:57},
+  ]);
+
+  // ── JOIGNABILITÉ INTERNE (rows 251-261, idx 250-260) ──
+  const joignInterne = extractSection([
+    {name:'Anaïs',    rowIdx:252},
+    {name:'Inès',     rowIdx:255},
+    {name:'Sophiane', rowIdx:258},
+    {name:'TOTAL',    rowIdx:260},
+  ]);
+
+  // ── JOIGNABILITÉ EXTERNE (rows 263-280, idx 262-279) ──
+  const joignExterne = extractSection([
+    {name:'Amanda',   rowIdx:264},
+    {name:'Axelle',   rowIdx:267},
+    {name:'Charlotte',rowIdx:269},
+    {name:'Louise',   rowIdx:271},
+    {name:'Nathalie', rowIdx:276},
+    {name:'TOTAL',    rowIdx:279},
+  ]);
+
+  // ── NOTE CLIENT INTERNE (rows 283-293, idx 282-292) ──
+  const noteInterne = extractSection([
+    {name:'Inès',     rowIdx:287},
+    {name:'Sophiane', rowIdx:290},
+    {name:'TOTAL',    rowIdx:292},
+  ]);
+
+  // ── NOTE CLIENT EXTERNE (rows 295-312, idx 294-311) ──
+  const noteExterne = extractSection([
+    {name:'Amanda',   rowIdx:296},
+    {name:'Axelle',   rowIdx:299},
+    {name:'Charlotte',rowIdx:301},
+    {name:'Louise',   rowIdx:303},
+    {name:'Nathalie', rowIdx:308},
+    {name:'TOTAL',    rowIdx:311},
+  ]);
+
+  return {
+    weekMap,
+    weeksForPeriod,  // function: periodStr → weekMap entries
+    venteInterne, venteExterne,
+    occupation, remplissage,
+    joignInterne, joignExterne,
+    noteInterne, noteExterne,
+  };
+}
+
+// ── Helper: get vals for a specific diet+KPI filtered to a period ──
+function hebdoValsForPeriod(dietData, periodWeeksArr) {
+  if(!dietData || !dietData.vals || !periodWeeksArr.length) return [];
+  // Match by col index
+  return periodWeeksArr.map(w => ({
+    week: w.week, year: w.year, label: w.label,
+    val: dietData.vals[periodWeeksArr[0].col - 3 + periodWeeksArr.indexOf(w)]
+    // Actually use col directly:
+  })).map((_,i) => {
+    const w = periodWeeksArr[i];
+    // Find position in weekMap
+    const pos = _hebdoData ? _hebdoData.weekMap.findIndex(wm=>wm.col===w.col) : -1;
+    return {week:w.week, year:w.year, label:w.label, val: pos>=0 ? dietData.vals[pos] : null};
+  });
+}
+
+// ── Corrélation taux de vente ↔ marge ──
+// For each diet + period: compute avg taux de vente during that period,
+// cross with marge/client for same cohorte
+function computeCorrelation(diets, hebdo, pi) {
+  if(!hebdo) return null;
+  const periodStr = _getRawPeriod(pi);
+  const periodWks = periodStr ? hebdo.weeksForPeriod(periodStr) : hebdo.weekMap.slice(-13);
+  if(!periodWks.length) return null;
+
+  const results = [];
+  diets.forEach(d => {
+    const dKey = d.name.toLowerCase();
+    const vData = hebdo.venteInterne[dKey] || hebdo.venteExterne[dKey];
+    const marge0 = d.mDB[0] || 0; // most recent period marge
+
+    if(!vData) return;
+    // Avg taux de vente over the period weeks
+    const pVals = periodWks.map(w => {
+      const pos = hebdo.weekMap.findIndex(wm=>wm.col===w.col);
+      return pos >= 0 ? vData.vals[pos] : null;
+    }).filter(v=>v!==null);
+
+    if(!pVals.length) return;
+    const avgVente = pVals.reduce((a,b)=>a+b,0)/pVals.length;
+
+    results.push({
+      name: d.name, meta: getDietMeta(d.name),
+      avgVente, marge: marge0,
+      mvsDB: d.mvsDB[0]||0,
+      weeks: pVals.length,
+      status: getDietMeta(d.name).status
+    });
+  });
+
+  // Sort by avgVente desc
+  results.sort((a,b) => b.avgVente - a.avgVente);
+
+  // Compute correlation coefficient (Pearson)
+  if(results.length < 3) return {results, corr: null};
+  const n = results.length;
+  const xs = results.map(r=>r.avgVente);
+  const ys = results.map(r=>r.marge);
+  const mx = xs.reduce((a,b)=>a+b)/n, my = ys.reduce((a,b)=>a+b)/n;
+  const num_c = xs.reduce((s,x,i)=>s+(x-mx)*(ys[i]-my),0);
+  const den = Math.sqrt(xs.reduce((s,x)=>s+(x-mx)**2,0)*ys.reduce((s,y)=>s+(y-my)**2,0));
+  const corr = den > 0 ? num_c/den : 0;
+
+  return {results, corr};
+}
+
+function buildActivitePanel() {
+
   const h_data = _hebdoData;
   if(!h_data) {
     return `<div style="padding:40px;text-align:center;color:var(--color-text-secondary)">
