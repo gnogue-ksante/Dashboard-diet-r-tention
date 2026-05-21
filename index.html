@@ -1572,13 +1572,25 @@ function _getObsWeekIdx(pi, hebdo) {
     : null;
   if(!obsDate) return hebdo.weekMap.length - 1;
   
-  // Find last weekMap entry whose START date is strictly BEFORE obsDate
-  // (week starting Monday — if obs date is a Wednesday, the current week is not yet complete)
-  let idx = -1;
+  // Find last complete week: last Monday strictly before obsDate
+  // If obsDate = Monday 18/05 (S21 start), last complete week = S20 (Monday 11/05)
+  // If obsDate = Friday 17/04, last complete week = S15 (Monday 07/04, since Mon 13/04 < 17/04 = S16... wait)
+  // Actually: we want the week that ended BEFORE obsDate
+  // Week N starts Monday wStart, ends Sunday wStart+6
+  // Last complete week = last week where wStart < obsDate (Monday of that week is before obsDate)
+  // For 17/04/2026 (Friday): 
+  //   S16 Monday = 13/04 < 17/04 → S16 qualifies... but expected is S15
+  //   S15 Monday = 06/04 < 17/04 → S15 qualifies
+  // The issue: "semaine précédant" means the PREVIOUS week, not the current incomplete one
+  // So: find the week CONTAINING obsDate, then take the one BEFORE it
+  // Week containing obsDate: last Monday <= obsDate
+  // Previous week: the one before that
+  let containingIdx = -1;
   for(let i = 0; i < hebdo.weekMap.length; i++) {
-    const wStart = hebdo.weekMap[i].date; // Monday of that week
-    if(wStart < obsDate) idx = i;
+    if(hebdo.weekMap[i].date <= obsDate) containingIdx = i;
   }
+  // Return the week BEFORE the containing week
+  const idx = containingIdx > 0 ? containingIdx - 1 : containingIdx;
   return idx >= 0 ? idx : hebdo.weekMap.length - 1;
 }
 
