@@ -672,8 +672,9 @@ function buildPanel(d){
       const jData=_hebdoData.joignInterne[dKey]||_hebdoData.joignExterne[dKey];
       const oData=_hebdoData.occupation[dKey];
       if(!vData&&!nData&&!oData) return '';
-      const weeks8=_hebdoData.weeks.slice(-8);
-      const idxs8=_hebdoData.weeks.map((_,i)=>i).slice(-8);
+      const _wm = _hebdoData.weekMap || [];
+      const weeks8 = _wm.slice(-8).map(w=>w.week);
+      const idxs8  = _wm.map((_,i)=>i).slice(-8);
       function spark(data,fmtFn,thG,thO){
         if(!data||!data.vals) return '<span style="font-size:11px;color:var(--color-text-secondary)">—</span>';
         const vals=idxs8.map(i=>data.vals[i]);
