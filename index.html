@@ -1411,10 +1411,24 @@ function parseHebdoData(rows) {
     if(d.getMonth() === 0 && weekNum > 50) yr--;
     else if(d.getMonth() === 11 && weekNum < 5) yr++;
     
-    // Only add if there's actual data somewhere in this column
-    // (skip completely empty columns at the end of the sheet)
-    const hasData = rows.some((row, ri) => ri > 4 && row[i] !== null && row[i] !== undefined && row[i] !== '' && !isNaN(parseFloat(row[i])));
-    if(!hasData) continue;
+    // Only include weeks that have data in the KEY rows (taux de vente sections)
+    // Check rows 183 (TOTAL interne), 192 (GLOBAL), 173 (header area)
+    // and occupation row 46 (TOTAL)
+    // Use rows 173-193 range (taux de vente section) + rows 36-46 (occupation)
+    const keyRowIdxs = [182, 191, 192, 45, 260, 279]; // TOTAL interne, TOTAL ext, GLOBAL, occ total, joign totals
+    const hasKeyData = keyRowIdxs.some(ri => {
+      if(ri >= rows.length) return false;
+      const v = rows[ri][i];
+      return v !== null && v !== undefined && v !== '' && !isNaN(parseFloat(v)) && parseFloat(v) > 0;
+    });
+    // Also check any individual diet row in vente section (rows 174-181, 184-191)
+    const venteRows = [173,174,175,176,177,178,179,180,181,184,185,186,187,188,189,190,191,192];
+    const hasVenteData = venteRows.some(ri => {
+      if(ri >= rows.length) return false;
+      const v = rows[ri][i];
+      return v !== null && v !== undefined && v !== '' && !isNaN(parseFloat(v)) && parseFloat(v) > 0;
+    });
+    if(!hasKeyData && !hasVenteData) continue;
     
     weekMap.push({col:i, week:weekNum, year:yr, date:d,
       label: yr+'-S'+(weekNum<10?'0':'')+weekNum});
@@ -1565,33 +1579,65 @@ function hebdoValsForPeriod(dietData, periodWeeksArr) {
 // cross with marge/client for same cohorte
 // Map P[i] label back to raw period string for weeksForPeriod
 // Get weekMap index of the LAST COMPLETE week BEFORE the observation date
+// Logic: find ISO week of obsDate, return index of week (isoWeek - 1) in same year
 function _getObsWeekIdx(pi, hebdo) {
   if(!hebdo) return hebdo ? hebdo.weekMap.length - 1 : -1;
   const obsDate = (window._obsDates && window._obsDates[pi]) 
     ? window._obsDates[pi] 
     : null;
   if(!obsDate) return hebdo.weekMap.length - 1;
-  
-  // Find last complete week: last Monday strictly before obsDate
-  // If obsDate = Monday 18/05 (S21 start), last complete week = S20 (Monday 11/05)
-  // If obsDate = Friday 17/04, last complete week = S15 (Monday 07/04, since Mon 13/04 < 17/04 = S16... wait)
-  // Actually: we want the week that ended BEFORE obsDate
-  // Week N starts Monday wStart, ends Sunday wStart+6
-  // Last complete week = last week where wStart < obsDate (Monday of that week is before obsDate)
-  // For 17/04/2026 (Friday): 
-  //   S16 Monday = 13/04 < 17/04 → S16 qualifies... but expected is S15
-  //   S15 Monday = 06/04 < 17/04 → S15 qualifies
-  // The issue: "semaine précédant" means the PREVIOUS week, not the current incomplete one
-  // So: find the week CONTAINING obsDate, then take the one BEFORE it
-  // Week containing obsDate: last Monday <= obsDate
-  // Previous week: the one before that
-  let containingIdx = -1;
-  for(let i = 0; i < hebdo.weekMap.length; i++) {
-    if(hebdo.weekMap[i].date <= obsDate) containingIdx = i;
+
+  // Compute ISO week of obsDate
+  function isoWeek(d) {
+    const jan4 = new Date(d.getFullYear(), 0, 4);
+    const msPerWeek = 7*24*3600*1000;
+    // Start of ISO week 1 = Monday on or before Jan 4
+    const startW1 = new Date(jan4.getTime() - ((jan4.getDay()+6)%7)*86400000);
+    const wn = Math.floor((d - startW1) / msPerWeek) + 1;
+    // Handle year boundaries
+    if(wn < 1) {
+      // Belongs to previous year's last week
+      const dec28 = new Date(d.getFullYear()-1, 11, 28);
+      return {w: isoWeek(dec28).w, y: d.getFullYear()-1};
+    }
+    // Check if week 53 belongs to next year
+    const dec28 = new Date(d.getFullYear(), 11, 28);
+    const lastWk = isoWeek(dec28).w;
+    if(wn > lastWk) return {w: 1, y: d.getFullYear()+1};
+    return {w: wn, y: d.getFullYear()};
   }
-  // Return the week BEFORE the containing week
-  const idx = containingIdx > 0 ? containingIdx - 1 : containingIdx;
-  return idx >= 0 ? idx : hebdo.weekMap.length - 1;
+
+  const {w: obsW, y: obsY} = isoWeek(obsDate);
+  
+  // Target: week obsW-1 of same year (or week 52/53 of previous year if obsW=1)
+  let targetW = obsW - 1;
+  let targetY = obsY;
+  if(targetW < 1) {
+    targetY = obsY - 1;
+    // Last week of previous year
+    const dec28prev = new Date(targetY, 11, 28);
+    targetW = isoWeek(dec28prev).w;
+  }
+
+  // Find in weekMap
+  let bestIdx = -1;
+  for(let i = 0; i < hebdo.weekMap.length; i++) {
+    const w = hebdo.weekMap[i];
+    if(w.week === targetW && w.year === targetY) {
+      bestIdx = i;
+      break;
+    }
+  }
+  // If not found exactly, find closest week before
+  if(bestIdx === -1) {
+    for(let i = 0; i < hebdo.weekMap.length; i++) {
+      const w = hebdo.weekMap[i];
+      const wAbs = w.year * 53 + w.week;
+      const tAbs = targetY * 53 + targetW;
+      if(wAbs <= tAbs) bestIdx = i;
+    }
+  }
+  return bestIdx >= 0 ? bestIdx : hebdo.weekMap.length - 1;
 }
 
 // Get recruitment start week index for a period
