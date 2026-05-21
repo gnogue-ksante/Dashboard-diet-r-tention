@@ -1793,7 +1793,7 @@ function buildActivitePanel() {
   return h;
 }
 
-function buildDashboard({ newAllData, newREF, newDiets, periodLabels }) {
+function buildDashboard({ newAllData, newREF, newDiets, periodLabels, hebdo }) {
   setStatus('Construction du dashboard…');
 
   // Override global variables
@@ -1801,7 +1801,7 @@ function buildDashboard({ newAllData, newREF, newDiets, periodLabels }) {
   Object.assign(REF, newREF);
   Object.assign(allData, newAllData);
   // Store hebdo data globally
-  if(parsed && parsed.hebdo) _hebdoData = parsed.hebdo;
+  if(hebdo) _hebdoData = hebdo;
 
   // Ensure vsAll arrays are available globally for buildAll()
   allData.vsAllDB = newAllData.vsAllDB;
@@ -1832,14 +1832,24 @@ function buildDashboard({ newAllData, newREF, newDiets, periodLabels }) {
   const actBtn=document.createElement('button');
   actBtn.className='nb'; actBtn.style.cssText='background:#FFF3E0;color:#E65100;border-color:#FFCC80';
   actBtn.textContent='📅 Activité';
-  addNav(actBtn,'panel-ACT',buildActivitePanel());
+  let actHTML = '';
+  try { actHTML = buildActivitePanel(); } catch(e) { 
+    actHTML = '<div style="padding:30px;color:#dc2626">Erreur activité: '+e.message+'</div>'; 
+    console.error('buildActivitePanel error:', e); 
+  }
+  addNav(actBtn,'panel-ACT',actHTML);
 
   diets.forEach(d=>{
     const uid=d.name.replace(/[^a-z]/gi,'');
     const btn=document.createElement('button');
     btn.className='nb';
     btn.innerHTML=`${d.name} <span style="font-size:10px;opacity:.55;margin-left:2px">${d.status}</span>`;
-    addNav(btn,`panel-${uid}`,buildPanel(d));
+    let panelHTML = '';
+    try { panelHTML = buildPanel(d); } catch(e) {
+      panelHTML = '<div style="padding:30px;color:#dc2626">Erreur panel '+d.name+': '+e.message+'</div>';
+      console.error('buildPanel error for '+d.name+':', e);
+    }
+    addNav(btn,`panel-${uid}`,panelHTML);
   });
 
   diets.forEach(d=>{
@@ -1873,8 +1883,11 @@ fetch(SCRIPT_URL)
     const ltvRows   = Array.isArray(data) ? data : (data.ltv   || data);
     const hebdoRows = Array.isArray(data) ? null  : (data.hebdo || null);
     const parsed = parseSheetData(ltvRows);
-    if(hebdoRows) parsed.hebdo = parseHebdoData(hebdoRows);
-    buildDashboard(parsed);
+    if(hebdoRows) {
+      try { parsed.hebdo = parseHebdoData(hebdoRows); }
+      catch(e) { console.warn('parseHebdoData failed:', e); parsed.hebdo = null; }
+    }
+    buildDashboard({...parsed, hebdo: parsed.hebdo||null});
   })
   .catch(err => {
     console.error('Erreur chargement sheet:', err);
@@ -1885,7 +1898,8 @@ fetch(SCRIPT_URL)
         newAllData: allData,
         newREF: REF,
         newDiets: diets,
-        periodLabels: P
+        periodLabels: P,
+        hebdo: null
       });
     }, 1000);
   });
