@@ -672,9 +672,10 @@ function buildPanel(d){
       const jData=_hebdoData.joignInterne[dKey]||_hebdoData.joignExterne[dKey];
       const oData=_hebdoData.occupation[dKey];
       if(!vData&&!nData&&!oData) return '';
-      const _wm = _hebdoData.weekMap || [];
-      const weeks8 = _wm.slice(-8).map(w=>w.week);
-      const idxs8  = _wm.map((_,i)=>i).slice(-8);
+      // Use full observation window for current period
+      const _obsWin = _getObsWindow(_actPeriodIdx||0, _hebdoData);
+      const idxs8   = _obsWin.idxs;
+      const weeks8  = _obsWin.weeks.map(w=>w.week);
       function spark(data,fmtFn,thG,thO){
         if(!data||!data.vals) return '<span style="font-size:11px;color:var(--color-text-secondary)">—</span>';
         const vals=idxs8.map(i=>data.vals[i]);
@@ -1200,9 +1201,8 @@ function parseSheetData(rows) {
   // Column order in sheet: D=newest, E, F, G, H=oldest
   // Since we read left to right from col 4, order is already newest first
   const periodLabels = periodCols.map(p => formatDatePeriod(p.label)||String(p.label));
+  const periodObsDates = periodCols.map(p => p.obsDate); // observation cutoff per period
   const nPeriods = periodCols.length;
-  
-  console.log('Périodes détectées:', periodLabels);
 
   setStatus(`${nPeriods} période(s) détectée(s)…`);
 
@@ -1367,7 +1367,7 @@ function parseSheetData(rows) {
     });
   }
 
-  return { newAllData, newREF, newDiets, periodLabels };
+  return { newAllData, newREF, newDiets, periodLabels, periodObsDates };
 }
 
 
@@ -1546,6 +1546,42 @@ function hebdoValsForPeriod(dietData, periodWeeksArr) {
 // For each diet + period: compute avg taux de vente during that period,
 // cross with marge/client for same cohorte
 // Map P[i] label back to raw period string for weeksForPeriod
+// Get weekMap index of observation cutoff for a given period
+function _getObsWeekIdx(pi, hebdo) {
+  if(!hebdo || !window._obsDates) return hebdo ? hebdo.weekMap.length - 1 : -1;
+  const obsDate = window._obsDates[pi];
+  if(!obsDate) return hebdo.weekMap.length - 1;
+  // Find last weekMap entry whose date <= obsDate
+  let idx = -1;
+  for(let i = 0; i < hebdo.weekMap.length; i++) {
+    if(hebdo.weekMap[i].date <= obsDate) idx = i;
+  }
+  return idx >= 0 ? idx : hebdo.weekMap.length - 1;
+}
+
+// Get recruitment start week index for a period
+function _getRecruitStartIdx(pi, hebdo) {
+  if(!hebdo) return 0;
+  const rawPeriod = _getRawPeriod(pi);
+  if(!rawPeriod) return 0;
+  const pWks = hebdo.weeksForPeriod(rawPeriod);
+  if(!pWks.length) return 0;
+  const firstCol = pWks[0].col;
+  const idx = hebdo.weekMap.findIndex(w => w.col === firstCol);
+  return idx >= 0 ? idx : 0;
+}
+
+// Get full observation window: from recruitment start to observation cutoff
+function _getObsWindow(pi, hebdo) {
+  if(!hebdo) return {idxs:[], weeks:[]};
+  const startIdx = _getRecruitStartIdx(pi, hebdo);
+  const endIdx   = _getObsWeekIdx(pi, hebdo);
+  const idxs = [];
+  for(let i = startIdx; i <= endIdx; i++) idxs.push(i);
+  const weeks = idxs.map(i => hebdo.weekMap[i]);
+  return {idxs, weeks};
+}
+
 function _getRawPeriod(pi) {
   // P[pi] is like "Nov–Jan 2026" → convert to "11/25 à 01/26"
   const months = {jan:1,fév:2,mar:3,avr:4,mai:5,jun:6,jul:7,aoû:8,sep:9,oct:10,nov:11,déc:12};
@@ -1563,11 +1599,15 @@ function _getRawPeriod(pi) {
 
 let _actPeriodIdx = 0;
 let _hebdoData = null;
+window._obsDates = [];
 
 function computeCorrelation(diets, hebdo, pi) {
   if(!hebdo) return null;
+  // Use recruitment weeks only for correlation (not full obs window)
   const periodStr = _getRawPeriod(pi);
   const periodWks = periodStr ? hebdo.weeksForPeriod(periodStr) : hebdo.weekMap.slice(-13);
+  // Observation window extends to cutoff date
+  const obsWin = _getObsWindow(pi, hebdo);
   if(!periodWks.length) return null;
 
   const results = [];
@@ -1622,8 +1662,10 @@ function buildActivitePanel() {
   }
 
   const allWeeks = h_data.weekMap;
-  const last8Idxs = allWeeks.map((_,i)=>i).slice(-8);
-  const last8Weeks = allWeeks.slice(-8);
+  // Default: observation window for period 0
+  const _defWin = _getObsWindow(0, h_data);
+  const last8Idxs = _defWin.idxs.length ? _defWin.idxs : allWeeks.map((_,i)=>i).slice(-8);
+  const last8Weeks = last8Idxs.map(i=>allWeeks[i]);
 
   function pct(v,d=1){return v===null||v===undefined?'—':(v*100).toFixed(d)+'%';}
   function ntv(v){return v===null||v===undefined?'—':v.toFixed(1)+'/10';}
@@ -1780,6 +1822,9 @@ function buildVenteTable(idxs, weeks) {
   function row(key,name,src,badgeCls,badgeTxt){
     const d=h_data[src][key]; if(!d) return '';
     const vals=idxs.map(i=>d.vals[i]);
+    // Exclude diet from avg if ALL values in period are 0 (no RDV)
+    const hasRdv = vals.some(v=>v!==null && v>0);
+    if(!hasRdv) return ''; // skip entirely if no RDV on this period
     const moy=vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
     const meta=getDietMeta(name);
     return `<tr><td><div style="display:flex;align-items:center;gap:5px">
@@ -1826,6 +1871,7 @@ function buildOccTable(idxs, weeks) {
   function row(key,name){
     const d=h_data.occupation[key]; if(!d) return '';
     const vals=idxs.map(i=>d.vals[i]);
+    if(!vals.some(v=>v!==null && v>0)) return ''; // exclude if no data
     const moy=vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
     const meta=getDietMeta(name);
     return `<tr><td><div style="display:flex;align-items:center;gap:5px">
@@ -1879,6 +1925,9 @@ function buildJoignTable(idxs, weeks) {
   function row(key,name,src,badgeCls,badgeTxt){
     const d=h_data[src][key]; if(!d) return '';
     const vals=idxs.map(i=>d.vals[i]);
+    // Exclude diet from avg if ALL values in period are 0 (no RDV)
+    const hasRdv = vals.some(v=>v!==null && v>0);
+    if(!hasRdv) return ''; // skip entirely if no RDV on this period
     const moy=vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
     const meta=getDietMeta(name);
     return `<tr><td><div style="display:flex;align-items:center;gap:5px">
@@ -1990,11 +2039,10 @@ function setActPeriod(pi) {
   _actPeriodIdx = pi;
   if(!_hebdoData) return;
   
-  // Get weeks for this period
-  const rawPeriod = _getRawPeriod(pi);
-  const periodWks = rawPeriod ? _hebdoData.weeksForPeriod(rawPeriod) : _hebdoData.weekMap.slice(-8);
-  const idxs = periodWks.map(w => _hebdoData.weekMap.findIndex(wm=>wm.col===w.col)).filter(i=>i>=0);
-  const wks  = idxs.map(i=>_hebdoData.weekMap[i]);
+  // Get full observation window for this period
+  const _win = _getObsWindow(pi, _hebdoData);
+  const idxs = _win.idxs;
+  const wks  = _win.weeks;
 
   // Update button states
   document.querySelectorAll('[data-act-period]').forEach(b=>{
@@ -2014,11 +2062,15 @@ function setActPeriod(pi) {
   if(co) co.innerHTML = buildCorrPanel(pi);
 }
 
-function buildDashboard({ newAllData, newREF, newDiets, periodLabels, hebdo }) {
+function buildDashboard({ newAllData, newREF, newDiets, periodLabels, periodObsDates, hebdo }) {
   setStatus('Construction du dashboard…');
 
   // Override global variables
   P.length=0; periodLabels.forEach(l=>P.push(l));
+  // Store observation dates globally
+  if(!window._obsDates) window._obsDates = [];
+  window._obsDates.length=0;
+  if(periodObsDates) periodObsDates.forEach(d=>window._obsDates.push(d));
   Object.assign(REF, newREF);
   Object.assign(allData, newAllData);
   // Store hebdo data globally
@@ -2097,7 +2149,7 @@ setStatus('Connexion à Google Sheets…');
 const _loadTimeout = setTimeout(()=>{
   console.warn('Load timeout — falling back to static data');
   try {
-    buildDashboard({newAllData:allData,newREF:REF,newDiets:diets,periodLabels:P,hebdo:null});
+    buildDashboard({newAllData:allData,newREF:REF,newDiets:diets,periodLabels:P,hebdo:null,periodObsDates:window._obsDates||null});
   } catch(e) { showError('Timeout de chargement. Rechargez la page.'); }
 }, 15000);
 
@@ -2116,7 +2168,7 @@ fetch(SCRIPT_URL)
       try { parsed.hebdo = parseHebdoData(hebdoRows); }
       catch(e) { console.warn('parseHebdoData failed:', e); parsed.hebdo = null; }
     }
-    clearTimeout(_loadTimeout); buildDashboard({...parsed, hebdo: parsed.hebdo||null});
+    clearTimeout(_loadTimeout); buildDashboard({...parsed, hebdo: parsed.hebdo||null, periodObsDates: parsed.periodObsDates||null});
   })
   .catch(err => {
     clearTimeout(_loadTimeout);
@@ -2124,7 +2176,7 @@ fetch(SCRIPT_URL)
     setStatus('Données live indisponibles — chargement données statiques…');
     setTimeout(() => {
       try {
-        buildDashboard({newAllData:allData,newREF:REF,newDiets:diets,periodLabels:P,hebdo:null});
+        buildDashboard({newAllData:allData,newREF:REF,newDiets:diets,periodLabels:P,hebdo:null,periodObsDates:window._obsDates||null});
       } catch(e2) { showError('Erreur: '+e2.message); }
     }, 500);
   });
