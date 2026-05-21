@@ -654,6 +654,41 @@ function buildPanel(d){
       <div class="verdict-lbl">Verdict & recommandation</div>
       <div class="verdict-txt">${d.verdict}</div>
     </div>
+    ${(()=>{
+      if(!_hebdoData) return '';
+      const dKey=d.name.toLowerCase();
+      const vData=_hebdoData.venteInterne[dKey]||_hebdoData.venteExterne[dKey];
+      const nData=_hebdoData.noteInterne[dKey]||_hebdoData.noteExterne[dKey];
+      const jData=_hebdoData.joignInterne[dKey]||_hebdoData.joignExterne[dKey];
+      const oData=_hebdoData.occupation[dKey];
+      if(!vData&&!nData&&!oData) return '';
+      const weeks8=_hebdoData.weeks.slice(-8);
+      const idxs8=_hebdoData.weeks.map((_,i)=>i).slice(-8);
+      function spark(data,fmtFn,thG,thO){
+        if(!data||!data.vals) return '<span style="font-size:11px;color:var(--color-text-secondary)">—</span>';
+        const vals=idxs8.map(i=>data.vals[i]);
+        const maxV=Math.max(...vals.filter(v=>v!==null).map(Math.abs),0.001);
+        return '<div style="display:flex;align-items:flex-end;gap:2px;height:56px">'+
+          vals.map((v,ii)=>{
+            if(v===null) return '<div style="flex:1;background:var(--color-border-tertiary);opacity:.2;height:4px;border-radius:2px;align-self:flex-end"></div>';
+            const hp=Math.max(Math.round((Math.abs(v)/maxV)*40),3);
+            const clr=v>=thG?'#16a34a':v>=thO?'#d97706':'#dc2626';
+            return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">'+
+              '<div style="font-size:7px;color:'+clr+';font-weight:600">'+fmtFn(v)+'</div>'+
+              '<div style="height:'+hp+'px;background:'+clr+';border-radius:2px;width:100%;opacity:.8"></div>'+
+              '<div style="font-size:7px;color:var(--color-text-secondary)">S'+weeks8[ii]+'</div>'+
+            '</div>';
+          }).join('')+'</div>';
+      }
+      let out='<div class="ablk" style="margin-top:10px"><div class="ablk-t">📅 Activité hebdo — 8 dernières semaines</div>';
+      out+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:8px">';
+      if(vData) out+='<div><div style="font-size:10px;font-weight:600;color:var(--color-text-secondary);margin-bottom:4px">TAUX DE VENTE</div>'+spark(vData,v=>(v*100).toFixed(0)+'%',0.2,0.1)+'</div>';
+      if(oData) out+='<div><div style="font-size:10px;font-weight:600;color:var(--color-text-secondary);margin-bottom:4px">OCCUPATION</div>'+spark(oData,v=>(v*100).toFixed(0)+'%',0.85,0.7)+'</div>';
+      if(nData) out+='<div><div style="font-size:10px;font-weight:600;color:var(--color-text-secondary);margin-bottom:4px">NOTE /10</div>'+spark(nData,v=>v.toFixed(1),9,8)+'</div>';
+      if(jData) out+='<div><div style="font-size:10px;font-weight:600;color:var(--color-text-secondary);margin-bottom:4px">JOIGNABILITÉ</div>'+spark(jData,v=>(v*100).toFixed(0)+'%',0.85,0.7)+'</div>';
+      out+='</div></div>';
+      return out;
+    })()}
   </div></div>`;
 
   // ── CLASSEMENT ──
@@ -1324,6 +1359,440 @@ function parseSheetData(rows) {
   return { newAllData, newREF, newDiets, periodLabels };
 }
 
+
+// ══════════════════════════════════════════════
+// PARSE KPI HEBDO SHEET
+// ══════════════════════════════════════════════
+function parseHebdoData(rows) {
+  if(!rows || rows.length < 10) return null;
+
+  // ── Week numbers from row 5 (idx 4), cols D+ (idx 3+)
+  const weekRow = rows[4] || [];
+  const weeks = [];
+  for(let c = 3; c < weekRow.length; c++) {
+    const v = weekRow[c];
+    if(v !== null && v !== undefined && v !== '' && !isNaN(parseFloat(v))) {
+      weeks.push({col: c, num: Math.round(parseFloat(v))});
+    }
+  }
+
+  // Helper: get numeric value from cell, null if invalid
+  function num(v) {
+    if(v === null || v === undefined || v === '' || v === '#DIV/0!' || v === '#REF!') return null;
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  }
+
+  // Helper: extract a diet→values map from a section
+  // sectionStartRow (0-based idx of label row), dataRows = [{name, rowIdx}]
+  function extractSection(dataRows) {
+    const result = {};
+    dataRows.forEach(({name, rowIdx}) => {
+      if(rowIdx >= rows.length) return;
+      const row = rows[rowIdx] || [];
+      const vals = weeks.map(w => num(row[w.col]));
+      result[name.toLowerCase()] = {name, vals, weeks: weeks.map(w => w.num)};
+    });
+    return result;
+  }
+
+  // ── TAUX DE VENTE (rows 173-193, 0-based 172-192)
+  // Interne: 174-183 (idx 173-182), Externe: 185-193 (idx 184-192)
+  const venteInterne = extractSection([
+    {name:'Anaïs',    rowIdx:174},
+    {name:'Barbara',  rowIdx:175},
+    {name:'Inès',     rowIdx:177},
+    {name:'Sophiane', rowIdx:180},
+    {name:'TOTAL',    rowIdx:182},
+  ]);
+  const venteExterne = extractSection([
+    {name:'Amanda',   rowIdx:184},
+    {name:'Axelle',   rowIdx:185},
+    {name:'Charlotte',rowIdx:186},
+    {name:'Louise',   rowIdx:188},
+    {name:'Nathalie', rowIdx:190},
+    {name:'GLOBAL',   rowIdx:192},
+  ]);
+
+  // ── TAUX D'OCCUPATION (rows 36-46, idx 35-45)
+  const occupation = extractSection([
+    {name:'Anaïs',    rowIdx:37},
+    {name:'Barbara',  rowIdx:38},
+    {name:'Inès',     rowIdx:40},
+    {name:'Sophiane', rowIdx:43},
+    {name:'TOTAL',    rowIdx:45},
+  ]);
+
+  // ── TAUX REMPLISSAGE AGENDA (rows 48-58, idx 47-57)
+  const remplissage = extractSection([
+    {name:'Anaïs',    rowIdx:49},
+    {name:'Barbara',  rowIdx:50},
+    {name:'Inès',     rowIdx:52},
+    {name:'Sophiane', rowIdx:55},
+    {name:'TOTAL',    rowIdx:57},
+  ]);
+
+  // ── NOTE CLIENT INTERNE (rows 283-293, idx 282-292)
+  const noteInterne = extractSection([
+    {name:'Inès',     rowIdx:287},
+    {name:'Sophiane', rowIdx:290},
+    {name:'TOTAL',    rowIdx:292},
+  ]);
+
+  // ── NOTE CLIENT EXTERNE (rows 295-312, idx 294-311)
+  const noteExterne = extractSection([
+    {name:'Amanda',   rowIdx:296},
+    {name:'Axelle',   rowIdx:299},
+    {name:'Charlotte',rowIdx:301},
+    {name:'Louise',   rowIdx:303},
+    {name:'Nathalie', rowIdx:308},
+    {name:'TOTAL',    rowIdx:311},
+  ]);
+
+  // ── TAUX JOIGNABILITÉ INTERNE (rows 251-261, idx 250-260)
+  const joignInterne = extractSection([
+    {name:'Inès',     rowIdx:255},
+    {name:'Sophiane', rowIdx:258},
+    {name:'TOTAL',    rowIdx:260},
+  ]);
+
+  // ── TAUX JOIGNABILITÉ EXTERNE (rows 263-280, idx 262-279)
+  const joignExterne = extractSection([
+    {name:'Amanda',   rowIdx:264},
+    {name:'Axelle',   rowIdx:267},
+    {name:'Charlotte',rowIdx:269},
+    {name:'Louise',   rowIdx:271},
+    {name:'Nathalie', rowIdx:276},
+    {name:'TOTAL',    rowIdx:279},
+  ]);
+
+  // ── TAUX SUIVI CLIENT (rows 380-385, idx 379-384)
+  const suiviClient = {
+    rdvRealises: (rows[383]||[]),
+    tauxSuivi:   (rows[383]||[]),
+    weeks: weeks.map(w=>w.num),
+  };
+  // Taux suivi = total RDV / estimation clients actifs
+  const suivi = extractSection([{name:'GLOBAL', rowIdx:383}]);
+
+  return {
+    weeks: weeks.map(w => w.num),
+    venteInterne, venteExterne,
+    occupation, remplissage,
+    noteInterne, noteExterne,
+    joignInterne, joignExterne,
+    suivi,
+  };
+}
+
+// ══════════════════════════════════════════════
+// BUILD ACTIVITE PANEL (global)
+// ══════════════════════════════════════════════
+let _hebdoData = null; // stored after fetch
+
+function buildActivitePanel() {
+  const h_data = _hebdoData;
+  if(!h_data) {
+    return `<div style="padding:40px;text-align:center;color:var(--color-text-secondary)">
+      <div style="font-size:24px;margin-bottom:12px">📊</div>
+      <div style="font-weight:600;margin-bottom:8px">Données hebdo non disponibles</div>
+      <div style="font-size:13px">Mettre à jour Apps Script pour inclure l'onglet "KPI hebdo"</div>
+    </div>`;
+  }
+
+  const weeks = h_data.weeks;
+  // Last 8 weeks
+  const last8 = weeks.slice(-8);
+  const colIdxs = weeks.map((_,i)=>i).slice(-8);
+
+  function pct(v, decimals=1) {
+    if(v===null||v===undefined) return '—';
+    return (v*100).toFixed(decimals)+'%';
+  }
+  function note(v) {
+    if(v===null||v===undefined) return '—';
+    return v.toFixed(1)+'/10';
+  }
+
+  function miniChart(data, valsKey, idxs, color, fmt='pct') {
+    const vals = idxs.map(i => data.vals ? data.vals[i] : null).filter(v=>v!==null);
+    if(!vals.length) return '<span style="color:var(--color-text-secondary);font-size:11px">Pas de données</span>';
+    const max = Math.max(...vals.map(Math.abs), 0.01);
+    const bars = idxs.map(i => {
+      const v = data.vals ? data.vals[i] : null;
+      if(v===null) return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px"><div style="flex:1;background:var(--color-border-tertiary);width:6px;border-radius:3px;margin:0 auto;opacity:.3"></div><div style="font-size:8px;color:var(--color-text-secondary)">—</div></div>';
+      const h = Math.min(Math.round((Math.abs(v)/max)*50),50);
+      const clr = fmt==='note' ? (v>=9?'#16a34a':v>=8?'#d97706':'#dc2626') : (v>=0.2?'#16a34a':v>=0.1?'#d97706':'#dc2626');
+      const label = fmt==='pct' ? (v*100).toFixed(0)+'%' : fmt==='note' ? v.toFixed(1) : v.toFixed(1)+'%';
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="font-size:8px;color:${clr};font-weight:600;font-family:var(--mono)">${label}</div>
+        <div style="height:${h}px;min-height:3px;background:${clr};width:8px;border-radius:3px;margin:0 auto;opacity:.85"></div>
+        <div style="font-size:8px;color:var(--color-text-secondary)">S${weeks[idxs.indexOf(i)+Math.max(0,weeks.length-8)]||'?'}</div>
+      </div>`;
+    });
+    return `<div style="display:flex;align-items:flex-end;gap:3px;height:80px;padding-top:16px">${bars.join('')}</div>`;
+  }
+
+  function kpiCard(title, value, trend, sub, color='var(--color-text-primary)') {
+    const trendIcon = trend>0?'↑':trend<0?'↓':'→';
+    const trendColor = trend>0?'#16a34a':trend<0?'#dc2626':'#9ca3af';
+    return `<div class="kpi-c" style="min-width:120px">
+      <div class="kpi-lbl">${title}</div>
+      <div class="kpi-val" style="color:${color};font-size:22px">${value}</div>
+      ${trend!==null?`<div style="font-size:11px;color:${trendColor};font-weight:600">${trendIcon} vs sem. préc.</div>`:''}
+      <div class="kpi-sub">${sub||''}</div>
+    </div>`;
+  }
+
+  function dietRow(name, vente, occ, note_v, joign, weeks_n) {
+    const meta = getDietMeta(name);
+    const v_last = vente&&vente.vals ? vente.vals[vente.vals.length-1] : null;
+    const o_last = occ&&occ.vals   ? occ.vals[occ.vals.length-1]     : null;
+    const n_last = note_v&&note_v.vals ? note_v.vals[note_v.vals.length-1] : null;
+    const j_last = joign&&joign.vals ? joign.vals[joign.vals.length-1] : null;
+    const vcl = v_last!==null ? (v_last>=0.2?'c-g':v_last>=0.1?'c-a':'c-r') : '';
+    const ocl = o_last!==null ? (o_last>=0.85?'c-g':o_last>=0.7?'c-a':'c-r') : '';
+    const ncl = n_last!==null ? (n_last>=9?'c-g':n_last>=8?'c-a':'c-r') : '';
+    const jcl = j_last!==null ? (j_last>=0.85?'c-g':j_last>=0.7?'c-a':'c-r') : '';
+    return `<tr><td><div style="display:flex;align-items:center;gap:6px">
+      <div style="width:24px;height:24px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">${meta.ini}</div>
+      <span style="font-size:12.5px">${name}</span>
+      <span class="bdg ${meta.status==='int'?'bdg-int':'bdg-ext'}" style="font-size:10px">${meta.status==='int'?'Int.':'Ext.'}</span>
+    </div></td>
+    <td class="${vcl}" style="font-family:var(--mono)">${v_last!==null?pct(v_last):'—'}</td>
+    <td class="${ocl}" style="font-family:var(--mono)">${o_last!==null?pct(o_last):'—'}</td>
+    <td class="${ncl}" style="font-family:var(--mono)">${n_last!==null?note(n_last):'—'}</td>
+    <td class="${jcl}" style="font-family:var(--mono)">${j_last!==null?pct(j_last):'—'}</td>
+    </tr>`;
+  }
+
+  // Global KPI dernière semaine
+  const lastW = last8[last8.length-1];
+  const lastI = colIdxs[colIdxs.length-1];
+  const globalVente  = h_data.venteExterne['global']   || h_data.venteInterne['total'];
+  const globalOcc    = h_data.occupation['total'];
+  const globalNote   = h_data.noteInterne['total']     || h_data.noteExterne['total'];
+  const globalJoign  = h_data.joignInterne['total']    || h_data.joignExterne['total'];
+
+  const gv = globalVente && globalVente.vals ? globalVente.vals[globalVente.vals.length-1] : null;
+  const go = globalOcc   && globalOcc.vals   ? globalOcc.vals[globalOcc.vals.length-1]     : null;
+  const gn = globalNote  && globalNote.vals  ? globalNote.vals[globalNote.vals.length-1]    : null;
+
+  let h = `<div class="hcard">
+    <div class="av" style="background:#FFF3E0;color:#E65100;border-color:#FFCC80;font-size:13px;font-weight:700">📅</div>
+    <div class="hinfo">
+      <div class="hname">Activité hebdomadaire</div>
+      <div class="hsub">Taux de vente · Occupation · Satisfaction client · ${weeks.length} semaines de données</div>
+    </div>
+  </div>`;
+
+  // ── KPI GLOBAUX ──
+  h += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+    ${kpiCard('Taux de vente global', gv!==null?pct(gv):'—', null, `S${lastW} — toutes diéts`, gv!==null?(gv>=0.2?'#16a34a':gv>=0.1?'#d97706':'#dc2626'):'var(--color-text-primary)')}
+    ${kpiCard("Taux d'occupation", go!==null?pct(go):'—', null, 'Internes · dernière semaine', go!==null?(go>=0.85?'#16a34a':go>=0.7?'#d97706':'#dc2626'):'var(--color-text-primary)')}
+    ${kpiCard('Note client moy.', gn!==null?note(gn):'—', null, 'Toutes diéts · dernière S', gn!==null?(gn>=9?'#16a34a':gn>=8?'#d97706':'#dc2626'):'var(--color-text-primary)')}
+    ${kpiCard('Semaines tracées', weeks.length+'', null, `S${weeks[0]} → S${weeks[weeks.length-1]}`, 'var(--color-text-secondary)')}
+  </div>`;
+
+  // ── TABS pour les vues détaillées ──
+  const actTabs = ['synthese','taux-vente','occupation','satisfaction'];
+  h += `<div class="tab-bar">
+    <button class="tb on" data-stab-uid="ACT" data-stab-idx="0" onclick="showTab('ACT',0)">Synthèse</button>
+    <button class="tb" data-stab-uid="ACT" data-stab-idx="1" onclick="showTab('ACT',1)">Taux de vente</button>
+    <button class="tb" data-stab-uid="ACT" data-stab-idx="2" onclick="showTab('ACT',2)">Occupation</button>
+    <button class="tb" data-stab-uid="ACT" data-stab-idx="3" onclick="showTab('ACT',3)">Satisfaction</button>
+  </div>`;
+  regTabs('ACT', actTabs);
+
+  // ── TAB SYNTHESE ──
+  h += `<div id="ACT-synthese" class="tab-c" style="display:block">
+  <div class="ltv-sec">
+    <div class="ltv-hd"><span style="font-weight:700;font-size:12px">Tableau de bord diéts — dernière semaine disponible</span></div>
+    <div class="tw"><table>
+    <thead><tr>
+      <th>Diét</th>
+      <th>Taux de vente</th>
+      <th>Taux d'occupation</th>
+      <th>Note client</th>
+      <th>Joignabilité</th>
+    </tr></thead><tbody>`;
+
+  const allDietNames = [...new Set([
+    ...Object.keys(h_data.venteInterne).filter(k=>k!=='total'),
+    ...Object.keys(h_data.venteExterne).filter(k=>k!=='global'),
+  ])].filter(k=>k!=='total'&&k!=='global');
+
+  allDietNames.forEach(name => {
+    const vData  = h_data.venteInterne[name]  || h_data.venteExterne[name];
+    const oData  = h_data.occupation[name];
+    const nData  = h_data.noteInterne[name]   || h_data.noteExterne[name];
+    const jData  = h_data.joignInterne[name]  || h_data.joignExterne[name];
+    const dispName = name.charAt(0).toUpperCase()+name.slice(1);
+    h += dietRow(dispName, vData, oData, nData, jData, last8);
+  });
+
+  h += `</tbody></table></div>
+  <div class="ref-bar">Taux de vente : ventes réalisées / RDV effectués · Vert ≥20% · Orange ≥10% · Rouge &lt;10%</div>
+  </div></div>`;
+
+  // ── TAB TAUX DE VENTE ──
+  h += `<div id="ACT-taux-vente" class="tab-c" style="display:none">
+  <div class="ltv-sec">
+    <div class="ltv-hd"><span style="font-weight:700;font-size:12px">Taux de vente hebdomadaire — 8 dernières semaines</span></div>
+    <div class="tw"><table>
+    <thead><tr><th>Diét</th><th>Statut</th>${last8.map(w=>`<th>S${w}</th>`).join('')}<th>Moy.</th></tr></thead><tbody>`;
+
+  // Interne
+  const interne_vente_names = ['anaïs','barbara','inès','sophiane'];
+  h += `<tr style="background:var(--db-l)"><td colspan="${2+last8.length+1}" style="font-size:10px;font-weight:700;color:var(--db);padding:4px 8px">INTERNES</td></tr>`;
+  interne_vente_names.forEach(key => {
+    const d = h_data.venteInterne[key];
+    if(!d) return;
+    const meta = getDietMeta(d.name);
+    const vals = colIdxs.map(i => d.vals[i]);
+    const moy = vals.filter(v=>v!==null).reduce((a,b)=>a+b,0) / (vals.filter(v=>v!==null).length||1);
+    h += `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:20px;height:20px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${meta.ini}</div>
+      ${d.name}</div></td>
+      <td><span class="bdg bdg-int" style="font-size:10px">Int.</span></td>
+      ${vals.map(v=>{
+        const cl=v===null?'':v>=0.2?'c-g':v>=0.1?'c-a':'c-r';
+        return `<td class="${cl}" style="font-family:var(--mono)">${v!==null?pct(v):'—'}</td>`;
+      }).join('')}
+      <td class="${moy>=0.2?'c-g':moy>=0.1?'c-a':'c-r'}" style="font-family:var(--mono);font-weight:700">${pct(moy)}</td>
+    </tr>`;
+  });
+  // Total interne
+  const ti = h_data.venteInterne['total'];
+  if(ti) {
+    const tivals = colIdxs.map(i=>ti.vals[i]);
+    const timoy = tivals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(tivals.filter(v=>v!==null).length||1);
+    h += `<tr style="font-weight:700;background:var(--color-background-secondary)"><td colspan="2">TOTAL INTERNE</td>
+      ${tivals.map(v=>`<td style="font-family:var(--mono)">${v!==null?pct(v):'—'}</td>`).join('')}
+      <td style="font-family:var(--mono);font-weight:700">${pct(timoy)}</td></tr>`;
+  }
+
+  // Externe
+  const externe_vente_names = ['amanda','axelle','charlotte','louise','nathalie'];
+  h += `<tr style="background:var(--kd-l)"><td colspan="${2+last8.length+1}" style="font-size:10px;font-weight:700;color:var(--kd-d);padding:4px 8px">EXTERNES</td></tr>`;
+  externe_vente_names.forEach(key => {
+    const d = h_data.venteExterne[key];
+    if(!d) return;
+    const meta = getDietMeta(d.name);
+    const vals = colIdxs.map(i => d.vals[i]);
+    const moy = vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    h += `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:20px;height:20px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${meta.ini}</div>
+      ${d.name}</div></td>
+      <td><span class="bdg bdg-ext" style="font-size:10px">Ext.</span></td>
+      ${vals.map(v=>{
+        const cl=v===null?'':v>=0.2?'c-g':v>=0.1?'c-a':'c-r';
+        return `<td class="${cl}" style="font-family:var(--mono)">${v!==null?pct(v):'—'}</td>`;
+      }).join('')}
+      <td class="${moy>=0.2?'c-g':moy>=0.1?'c-a':'c-r'}" style="font-family:var(--mono);font-weight:700">${pct(moy)}</td>
+    </tr>`;
+  });
+  // Total externe + global
+  const te = h_data.venteExterne['total'] || h_data.venteExterne['total diet externe'];
+  const gl = h_data.venteExterne['global'];
+  if(te) {
+    const tevals = colIdxs.map(i=>te.vals[i]);
+    const temoy = tevals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(tevals.filter(v=>v!==null).length||1);
+    h += `<tr style="font-weight:700;background:var(--color-background-secondary)"><td colspan="2">TOTAL EXTERNE</td>
+      ${tevals.map(v=>`<td style="font-family:var(--mono)">${v!==null?pct(v):'—'}</td>`).join('')}
+      <td style="font-family:var(--mono);font-weight:700">${pct(temoy)}</td></tr>`;
+  }
+  if(gl) {
+    const glvals = colIdxs.map(i=>gl.vals[i]);
+    const glmoy = glvals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(glvals.filter(v=>v!==null).length||1);
+    h += `<tr style="font-weight:700;background:#F0FDF4"><td colspan="2" style="color:#16a34a">🌐 GLOBAL</td>
+      ${glvals.map(v=>`<td style="font-family:var(--mono);font-weight:700;color:#16a34a">${v!==null?pct(v):'—'}</td>`).join('')}
+      <td style="font-family:var(--mono);font-weight:700;color:#16a34a">${pct(glmoy)}</td></tr>`;
+  }
+
+  h += `</tbody></table></div>
+  <div class="ref-bar">Taux de vente = ventes réalisées / RDV effectués · <span class="c-g">≥20%</span> · <span class="c-a">≥10%</span> · <span class="c-r">&lt;10%</span></div>
+  </div></div>`;
+
+  // ── TAB OCCUPATION ──
+  h += `<div id="ACT-occupation" class="tab-c" style="display:none">
+  <div class="ltv-sec">
+    <div class="ltv-hd"><span style="font-weight:700;font-size:12px">Taux d'occupation (internes) — 8 dernières semaines</span></div>
+    <div class="tw"><table>
+    <thead><tr><th>Diét</th>${last8.map(w=>`<th>S${w}</th>`).join('')}<th>Moy.</th></tr></thead><tbody>`;
+
+  ['anaïs','barbara','inès','sophiane'].forEach(key => {
+    const d = h_data.occupation[key];
+    if(!d) return;
+    const meta = getDietMeta(d.name);
+    const vals = colIdxs.map(i=>d.vals[i]);
+    const moy = vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    h += `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:20px;height:20px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${meta.ini}</div>
+      ${d.name}</div></td>
+      ${vals.map(v=>{
+        const cl=v===null?'':v>=0.85?'c-g':v>=0.7?'c-a':'c-r';
+        return `<td class="${cl}" style="font-family:var(--mono)">${v!==null?pct(v):'—'}</td>`;
+      }).join('')}
+      <td class="${moy>=0.85?'c-g':moy>=0.7?'c-a':'c-r'}" style="font-family:var(--mono);font-weight:700">${pct(moy)}</td>
+    </tr>`;
+  });
+  const tot_occ = h_data.occupation['total'];
+  if(tot_occ) {
+    const tv = colIdxs.map(i=>tot_occ.vals[i]);
+    const tm = tv.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(tv.filter(v=>v!==null).length||1);
+    h += `<tr style="font-weight:700;background:var(--color-background-secondary)"><td>TOTAL</td>
+      ${tv.map(v=>`<td style="font-family:var(--mono)">${v!==null?pct(v):'—'}</td>`).join('')}
+      <td style="font-family:var(--mono);font-weight:700">${pct(tm)}</td></tr>`;
+  }
+  h += `</tbody></table></div>
+  <div class="ref-bar">Taux d'occupation = heures productives / heures contractuelles · <span class="c-g">≥85%</span> · <span class="c-a">≥70%</span> · <span class="c-r">&lt;70%</span></div>
+  </div></div>`;
+
+  // ── TAB SATISFACTION ──
+  h += `<div id="ACT-satisfaction" class="tab-c" style="display:none">
+  <div class="ltv-sec">
+    <div class="ltv-hd"><span style="font-weight:700;font-size:12px">Note client /10 — 8 dernières semaines</span></div>
+    <div class="tw"><table>
+    <thead><tr><th>Diét</th><th>Statut</th>${last8.map(w=>`<th>S${w}</th>`).join('')}<th>Moy.</th></tr></thead><tbody>`;
+
+  const note_interne_keys = ['inès','sophiane'];
+  const note_externe_keys = ['amanda','axelle','charlotte','louise','nathalie'];
+
+  h += `<tr style="background:var(--db-l)"><td colspan="${2+last8.length+1}" style="font-size:10px;font-weight:700;color:var(--db);padding:4px 8px">INTERNES</td></tr>`;
+  note_interne_keys.forEach(key => {
+    const d = h_data.noteInterne[key];
+    if(!d) return;
+    const meta = getDietMeta(d.name);
+    const vals = colIdxs.map(i=>d.vals[i]);
+    const moy = vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    h += `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:20px;height:20px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${meta.ini}</div>
+      ${d.name}</div></td><td><span class="bdg bdg-int" style="font-size:10px">Int.</span></td>
+      ${vals.map(v=>{const cl=v===null?'':v>=9?'c-g':v>=8?'c-a':'c-r';return `<td class="${cl}" style="font-family:var(--mono)">${v!==null?note(v):'—'}</td>`}).join('')}
+      <td class="${moy>=9?'c-g':moy>=8?'c-a':'c-r'}" style="font-family:var(--mono);font-weight:700">${note(moy)}</td></tr>`;
+  });
+
+  h += `<tr style="background:var(--kd-l)"><td colspan="${2+last8.length+1}" style="font-size:10px;font-weight:700;color:var(--kd-d);padding:4px 8px">EXTERNES</td></tr>`;
+  note_externe_keys.forEach(key => {
+    const d = h_data.noteExterne[key];
+    if(!d) return;
+    const meta = getDietMeta(d.name);
+    const vals = colIdxs.map(i=>d.vals[i]);
+    const moy = vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    h += `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:20px;height:20px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${meta.ini}</div>
+      ${d.name}</div></td><td><span class="bdg bdg-ext" style="font-size:10px">Ext.</span></td>
+      ${vals.map(v=>{const cl=v===null?'':v>=9?'c-g':v>=8?'c-a':'c-r';return `<td class="${cl}" style="font-family:var(--mono)">${v!==null?note(v):'—'}</td>`}).join('')}
+      <td class="${moy>=9?'c-g':moy>=8?'c-a':'c-r'}" style="font-family:var(--mono);font-weight:700">${note(moy)}</td></tr>`;
+  });
+  h += `</tbody></table></div>
+  <div class="ref-bar">Note /10 · <span class="c-g">≥9.0</span> · <span class="c-a">≥8.0</span> · <span class="c-r">&lt;8.0</span></div>
+  </div></div>`;
+
+  return h;
+}
+
 function buildDashboard({ newAllData, newREF, newDiets, periodLabels }) {
   setStatus('Construction du dashboard…');
 
@@ -1331,6 +1800,9 @@ function buildDashboard({ newAllData, newREF, newDiets, periodLabels }) {
   P.length=0; periodLabels.forEach(l=>P.push(l));
   Object.assign(REF, newREF);
   Object.assign(allData, newAllData);
+  // Store hebdo data globally
+  if(parsed && parsed.hebdo) _hebdoData = parsed.hebdo;
+
   // Ensure vsAll arrays are available globally for buildAll()
   allData.vsAllDB = newAllData.vsAllDB;
   allData.vsAllKD = newAllData.vsAllKD;
@@ -1355,6 +1827,12 @@ function buildDashboard({ newAllData, newREF, newDiets, periodLabels }) {
   const ltvBtn=document.createElement('button');
   ltvBtn.className='nb nb-ltv'; ltvBtn.textContent='Perf. × hors-suivi';
   addNav(ltvBtn,'panel-LTV',buildGlobalLTV());
+
+  // ── ACTIVITÉ HEBDO ──
+  const actBtn=document.createElement('button');
+  actBtn.className='nb'; actBtn.style.cssText='background:#FFF3E0;color:#E65100;border-color:#FFCC80';
+  actBtn.textContent='📅 Activité';
+  addNav(actBtn,'panel-ACT',buildActivitePanel());
 
   diets.forEach(d=>{
     const uid=d.name.replace(/[^a-z]/gi,'');
@@ -1390,8 +1868,12 @@ fetch(SCRIPT_URL)
     setStatus('Données reçues, parsing…');
     return r.json();
   })
-  .then(rows => {
-    const parsed = parseSheetData(rows);
+  .then(data => {
+    // Handle both old format (array) and new format ({ltv, hebdo})
+    const ltvRows   = Array.isArray(data) ? data : (data.ltv   || data);
+    const hebdoRows = Array.isArray(data) ? null  : (data.hebdo || null);
+    const parsed = parseSheetData(ltvRows);
+    if(hebdoRows) parsed.hebdo = parseHebdoData(hebdoRows);
     buildDashboard(parsed);
   })
   .catch(err => {
