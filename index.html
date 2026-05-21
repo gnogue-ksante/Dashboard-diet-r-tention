@@ -1382,22 +1382,40 @@ function parseHebdoData(rows) {
   // Row 5 (idx 4) has week numbers, cols starting at idx 3
   const weekRow = rows[4] || [];
   const ANCHOR_COL = 7;
-  const ANCHOR_DATE = new Date(2025, 2, 31); // 31 March 2025
+  const ANCHOR_DATE = new Date(2025, 2, 31); // 31 March 2025 = week 14 2025
 
   const weekMap = []; // {col, week, year, date, label}
   for(let i = 3; i < weekRow.length; i++) {
     const v = weekRow[i];
-    if(v === null || v === undefined || v === '') continue;
-    const wn = parseFloat(v);
-    if(isNaN(wn)) continue;
-    const weekNum = Math.round(wn);
-    // Calculate date from anchor
+    // Calculate date from anchor regardless of whether row5 has week number
     const msOffset = (i - ANCHOR_COL) * 7 * 24 * 3600 * 1000;
     const d = new Date(ANCHOR_DATE.getTime() + msOffset);
+    
+    let weekNum;
+    if(v !== null && v !== undefined && v !== '' && !isNaN(parseFloat(v))) {
+      // Row 5 has explicit week number (cols up to S52)
+      weekNum = Math.round(parseFloat(v));
+    } else {
+      // Row 5 has formula result for 2026+ weeks — compute from date
+      // ISO week number
+      const jan4 = new Date(d.getFullYear(), 0, 4);
+      const startOfWeek1 = new Date(jan4);
+      startOfWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+      weekNum = Math.round((d - startOfWeek1) / (7 * 24 * 3600 * 1000)) + 1;
+      if(weekNum < 1) weekNum = 52; // edge case
+      if(weekNum > 53) weekNum = 1;
+    }
+    
     let yr = d.getFullYear();
     // Cross-year fix
     if(d.getMonth() === 0 && weekNum > 50) yr--;
     else if(d.getMonth() === 11 && weekNum < 5) yr++;
+    
+    // Only add if there's actual data somewhere in this column
+    // (skip completely empty columns at the end of the sheet)
+    const hasData = rows.some((row, ri) => ri > 4 && row[i] !== null && row[i] !== undefined && row[i] !== '' && !isNaN(parseFloat(row[i])));
+    if(!hasData) continue;
+    
     weekMap.push({col:i, week:weekNum, year:yr, date:d,
       label: yr+'-S'+(weekNum<10?'0':'')+weekNum});
   }
