@@ -1564,15 +1564,20 @@ function hebdoValsForPeriod(dietData, periodWeeksArr) {
 // For each diet + period: compute avg taux de vente during that period,
 // cross with marge/client for same cohorte
 // Map P[i] label back to raw period string for weeksForPeriod
-// Get weekMap index of observation cutoff for a given period
+// Get weekMap index of the LAST COMPLETE week BEFORE the observation date
 function _getObsWeekIdx(pi, hebdo) {
-  if(!hebdo || !window._obsDates) return hebdo ? hebdo.weekMap.length - 1 : -1;
-  const obsDate = window._obsDates[pi];
+  if(!hebdo) return hebdo ? hebdo.weekMap.length - 1 : -1;
+  const obsDate = (window._obsDates && window._obsDates[pi]) 
+    ? window._obsDates[pi] 
+    : null;
   if(!obsDate) return hebdo.weekMap.length - 1;
-  // Find last weekMap entry whose date <= obsDate
+  
+  // Find last weekMap entry whose START date is strictly BEFORE obsDate
+  // (week starting Monday — if obs date is a Wednesday, the current week is not yet complete)
   let idx = -1;
   for(let i = 0; i < hebdo.weekMap.length; i++) {
-    if(hebdo.weekMap[i].date <= obsDate) idx = i;
+    const wStart = hebdo.weekMap[i].date; // Monday of that week
+    if(wStart < obsDate) idx = i;
   }
   return idx >= 0 ? idx : hebdo.weekMap.length - 1;
 }
@@ -1621,52 +1626,61 @@ window._obsDates = [];
 
 function computeCorrelation(diets, hebdo, pi) {
   if(!hebdo) return null;
-  // Use recruitment weeks only for correlation (not full obs window)
-  const periodStr = _getRawPeriod(pi);
-  const periodWks = periodStr ? hebdo.weeksForPeriod(periodStr) : hebdo.weekMap.slice(-13);
-  // Observation window extends to cutoff date
-  const obsWin = _getObsWindow(pi, hebdo);
-  if(!periodWks.length) return null;
 
+  // Full observation window: from first recruitment week to last week before obs date
+  const obsWin = _getObsWindow(pi, hebdo);
+  if(!obsWin.idxs.length) return null;
+
+  // Also get the marge for the matching period (same pi)
   const results = [];
   diets.forEach(d => {
     const dKey = d.name.toLowerCase();
     const vData = hebdo.venteInterne[dKey] || hebdo.venteExterne[dKey];
-    const marge0 = d.mDB[0] || 0; // most recent period marge
+    
+    // Marge for this specific period
+    const marge = (d.mDB && d.mDB[pi] !== undefined) ? d.mDB[pi] : (d.mDB ? d.mDB[0] : 0);
+    const mvsDB = (d.mvsDB && d.mvsDB[pi] !== undefined) ? d.mvsDB[pi] : (d.mvsDB ? d.mvsDB[0] : 0);
 
-    if(!vData) return;
-    // Avg taux de vente over the period weeks
-    const pVals = periodWks.map(w => {
-      const pos = hebdo.weekMap.findIndex(wm=>wm.col===w.col);
-      return pos >= 0 ? vData.vals[pos] : null;
-    }).filter(v=>v!==null);
+    if(!vData || !vData.vals) return;
 
-    if(!pVals.length) return;
-    const avgVente = pVals.reduce((a,b)=>a+b,0)/pVals.length;
+    // Taux de vente sur la fenêtre complète d'observation
+    const obsVals = obsWin.idxs.map(i => vData.vals[i]).filter(v => v !== null && !isNaN(v));
+    
+    // Exclude if no RDV data (all zeros or all null)
+    const hasRdv = obsVals.some(v => v > 0);
+    if(!hasRdv || !obsVals.length) return;
+
+    const avgVente = obsVals.reduce((a,b)=>a+b,0) / obsVals.length;
 
     results.push({
-      name: d.name, meta: getDietMeta(d.name),
-      avgVente, marge: marge0,
-      mvsDB: d.mvsDB[0]||0,
-      weeks: pVals.length,
-      status: getDietMeta(d.name).status
+      name: d.name,
+      meta: getDietMeta(d.name),
+      avgVente,
+      marge: marge || 0,
+      mvsDB: mvsDB || 0,
+      weeksCount: obsVals.length,
+      status: getDietMeta(d.name).status,
+      obsStart: obsWin.weeks[0] ? obsWin.weeks[0].label : '?',
+      obsEnd:   obsWin.weeks[obsWin.weeks.length-1] ? obsWin.weeks[obsWin.weeks.length-1].label : '?',
     });
   });
 
-  // Sort by avgVente desc
   results.sort((a,b) => b.avgVente - a.avgVente);
 
-  // Compute correlation coefficient (Pearson)
-  if(results.length < 3) return {results, corr: null};
+  // Pearson correlation r between avgVente (X) and marge (Y)
+  if(results.length < 3) return {results, corr: null, obsWin};
   const n = results.length;
   const xs = results.map(r=>r.avgVente);
   const ys = results.map(r=>r.marge);
-  const mx = xs.reduce((a,b)=>a+b)/n, my = ys.reduce((a,b)=>a+b)/n;
+  const mx = xs.reduce((a,b)=>a+b)/n;
+  const my = ys.reduce((a,b)=>a+b)/n;
   const num_c = xs.reduce((s,x,i)=>s+(x-mx)*(ys[i]-my),0);
-  const den = Math.sqrt(xs.reduce((s,x)=>s+(x-mx)**2,0)*ys.reduce((s,y)=>s+(y-my)**2,0));
-  const corr = den > 0 ? num_c/den : 0;
+  const den = Math.sqrt(
+    xs.reduce((s,x)=>s+(x-mx)**2,0) * ys.reduce((s,y)=>s+(y-my)**2,0)
+  );
+  const corr = den > 0 ? (num_c/den) : 0;
 
-  return {results, corr};
+  return {results, corr, obsWin};
 }
 
 function buildActivitePanel() {
@@ -1969,14 +1983,19 @@ function buildJoignTable(idxs, weeks) {
 
 function buildCorrPanel(pi) {
   if(!_hebdoData) return '<div style="padding:20px;color:var(--color-text-secondary)">Données hebdo non disponibles</div>';
-  const periodStr = P[pi] ? P[pi].replace('–','/').replace(' ','_') : '';
-  // Reconstruct the original period string from P label
-  // P[pi] is like "Nov–Jan 2026" → need to map back to "11/25 à 01/26"
-  // We use the weeksForPeriod with a simpler approach: find weeks by months
   const corrData = computeCorrelation(diets, _hebdoData, pi);
   
+  const obsWin = corrData ? corrData.obsWin : null;
+  const obsStart = obsWin && obsWin.weeks && obsWin.weeks[0] ? obsWin.weeks[0].label : '?';
+  const obsEnd   = obsWin && obsWin.weeks && obsWin.weeks.length ? obsWin.weeks[obsWin.weeks.length-1].label : '?';
   let h = `<div class="ltv-sec">
-  <div class="ltv-hd"><span style="font-weight:700;font-size:12px">Corrélation Taux de vente ↔ Marge — ${P[pi]||'Période actuelle'}</span></div>`;
+  <div class="ltv-hd">
+    <span style="font-weight:700;font-size:12px">Corrélation Taux de vente ↔ Marge — ${P[pi]||'Période actuelle'}</span>
+    <span style="font-size:11px;color:var(--color-text-secondary);margin-left:8px">Fenêtre d'observation : ${obsStart} → ${obsEnd}</span>
+  </div>
+  <div style="font-size:12px;color:var(--color-text-secondary);padding:8px 0 12px;line-height:1.7">
+    <strong>Comment lire ce tableau :</strong> Pour chaque diét, on calcule le taux de vente moyen sur toutes les semaines entre le début du recrutement du pool (<strong>${obsStart}</strong>) et la semaine précédant la date d'observation (<strong>${obsEnd}</strong>). On compare ce taux à la marge par client générée sur la cohorte de la même période. Le coefficient <strong>r</strong> mesure si les deux variables varient dans le même sens : <span style="color:#16a34a">r proche de 1</span> = lien fort positif · <span style="color:#6b7280">r proche de 0</span> = pas de lien · <span style="color:#dc2626">r négatif</span> = lien inverse.
+  </div>`;
 
   if(!corrData || !corrData.results.length) {
     return h + '<div style="padding:20px;color:var(--color-text-secondary);text-align:center">Pas assez de données pour cette période</div></div>';
@@ -2047,7 +2066,7 @@ function buildCorrPanel(pi) {
   });
 
   h += `</tbody></table></div>
-  <div class="ref-bar">Taux de vente moy. = moyenne des semaines de la période de recrutement · Marge = cohorte la plus récente correspondante · <strong>r = ${corr!==null?corr.toFixed(2):'n/a'}</strong></div>
+  <div class="ref-bar">Taux de vente moy. = moyenne sur ${obsStart} → ${obsEnd} · Marge/client = cohorte ${P[pi]||''} · Exclu si 0 RDV · <strong>r = ${corr!==null?corr.toFixed(2):'n/a'}</strong></div>
   </div>`;
   return h;
 }
