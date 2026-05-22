@@ -1450,6 +1450,7 @@ function parseHebdoData(rows) {
     {name:'Charlotte',rowIdx:186},
     {name:'Louise',   rowIdx:188},
     {name:'Nathalie', rowIdx:190},
+    {name:'Rose',     rowIdx:187},
     {name:'TOTAL',    rowIdx:191},
     {name:'GLOBAL',   rowIdx:192},
   ]);
@@ -1475,6 +1476,7 @@ function parseHebdoData(rows) {
   // ── JOIGNABILITÉ INTERNE (rows 251-261, idx 250-260) ──
   const joignInterne = extractSection([
     {name:'Anaïs',    rowIdx:252},
+    {name:'Barbara',  rowIdx:253},
     {name:'Inès',     rowIdx:255},
     {name:'Sophiane', rowIdx:258},
     {name:'TOTAL',    rowIdx:260},
@@ -1492,6 +1494,8 @@ function parseHebdoData(rows) {
 
   // ── NOTE CLIENT INTERNE (rows 283-293, idx 282-292) ──
   const noteInterne = extractSection([
+    {name:'Anaïs',    rowIdx:284},
+    {name:'Barbara',  rowIdx:285},
     {name:'Inès',     rowIdx:287},
     {name:'Sophiane', rowIdx:290},
     {name:'TOTAL',    rowIdx:292},
