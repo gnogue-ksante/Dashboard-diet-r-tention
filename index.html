@@ -1142,28 +1142,23 @@ function parseSheetData(rows) {
   let headerRow = -1;
   let periodCols = []; // {col, label, obsDate}
 
+  // ALWAYS read period labels from labelRow (rows[1]) and obs dates from obsRow (rows[0])
+  // Find header row just to know dataStart
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     if (String(r[0]||'').trim()==='Marque' || String(r[1]||'').trim()==='Catégorie') {
       headerRow = i;
-      // Period labels are in this row, obs dates are in rows[0]
-      for (let c = 3; c < r.length; c++) {
-        const lbl = String(r[c]||'').trim();
-        if (lbl && lbl.includes('/') && lbl.length > 3) {
-          periodCols.push({col:c, label:lbl, obsDate: parseObsDate(obsRow[c])});
-        }
-      }
       break;
     }
   }
+  if(headerRow === -1) headerRow = 2; // default
 
-  // Fallback: labelRow has period strings, obsRow has dates
-  if(periodCols.length === 0) {
-    for(let c = 3; c < labelRow.length; c++) {
-      const lbl = String(labelRow[c]||'').trim();
-      if(lbl && lbl.includes('/') && lbl.length > 3) {
-        periodCols.push({col:c, label:lbl, obsDate: parseObsDate(obsRow[c])});
-      }
+  // Read period labels from labelRow (rows[1]) — always
+  for (let c = 3; c < labelRow.length; c++) {
+    const lbl = String(labelRow[c]||'').trim();
+    if (lbl && lbl.includes('/') && lbl.length > 3 && !lbl.startsWith('//')) {
+      const obsDate = parseObsDate(obsRow[c]);
+      periodCols.push({col:c, label:lbl, obsDate});
     }
   }
 
