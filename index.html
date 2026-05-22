@@ -1112,6 +1112,10 @@ function parseSheetData(rows) {
   // Row 2 (index 2) = header: Marque | Catégorie | Diet | periods...
   const obsRow   = rows[0] || [];
   const labelRow = rows[1] || [];
+  // DEBUG
+  console.log('obsRow cols 3-8:', obsRow.slice(3,8));
+  console.log('labelRow cols 3-8:', labelRow.slice(3,8));
+  console.log('rows[2] cols 3-8:', (rows[2]||[]).slice(3,8));
 
   // Parse an observation date cell → JS Date
   function parseObsDate(raw) {
