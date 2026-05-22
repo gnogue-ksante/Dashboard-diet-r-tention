@@ -1547,23 +1547,28 @@ function _getObsWeekIdx(pi, hebdo) {
   if(!obsDate) return hebdo.weekMap.length - 1;
 
   // Compute ISO week of obsDate
+  // ISO week calculation — non-recursive to avoid infinite loop on Dec 28
+  function isoWeekNum(yr) {
+    // Number of ISO weeks in a given year: 52 or 53
+    // A year has 53 weeks if Jan 1 is Thu, or if it's a leap year and Jan 1 is Wed
+    const jan1 = new Date(yr, 0, 1).getDay(); // 0=Sun,1=Mon,...,6=Sat
+    const isLeap = (yr%4===0 && yr%100!==0) || yr%400===0;
+    return (jan1===4 || (isLeap && jan1===3)) ? 53 : 52;
+  }
   function isoWeek(d) {
-    const jan4 = new Date(d.getFullYear(), 0, 4);
     const msPerWeek = 7*24*3600*1000;
+    const yr = d.getFullYear();
+    const jan4 = new Date(yr, 0, 4);
     // Start of ISO week 1 = Monday on or before Jan 4
     const startW1 = new Date(jan4.getTime() - ((jan4.getDay()+6)%7)*86400000);
     const wn = Math.floor((d - startW1) / msPerWeek) + 1;
-    // Handle year boundaries
     if(wn < 1) {
       // Belongs to previous year's last week
-      const dec28 = new Date(d.getFullYear()-1, 11, 28);
-      return {w: isoWeek(dec28).w, y: d.getFullYear()-1};
+      return {w: isoWeekNum(yr-1), y: yr-1};
     }
-    // Check if week 53 belongs to next year
-    const dec28 = new Date(d.getFullYear(), 11, 28);
-    const lastWk = isoWeek(dec28).w;
-    if(wn > lastWk) return {w: 1, y: d.getFullYear()+1};
-    return {w: wn, y: d.getFullYear()};
+    const lastWk = isoWeekNum(yr);
+    if(wn > lastWk) return {w: 1, y: yr+1};
+    return {w: wn, y: yr};
   }
 
   const {w: obsW, y: obsY} = isoWeek(obsDate);
