@@ -1534,13 +1534,10 @@ function parseHebdoData(rows) {
   ]);
 
   // ── VENTES BRUTES INTERNE (rows 229-237, idx 228-236) — formules GSheet ──
-  const ventesInterne = extractSection([
-    {name:'Anaïs',    rowIdx:228},
-    {name:'Barbara',  rowIdx:230},
-    {name:'Inès',     rowIdx:233},
-    {name:'Sophiane', rowIdx:234},
-    {name:'TOTAL',    rowIdx:236},
-  ]);
+  // ── VENTES BRUTES INTERNE ──
+  // Les lignes 229-237 (Excel) n'ont pas de nom en col C → mapping ambigu.
+  // On utilise uniquement le fallback taux×RDV pour les internes.
+  const ventesInterne = {}; // intentionnellement vide — fallback taux×RDV utilisé
 
   // ── VENTES BRUTES EXTERNE (rows 239-246, idx 238-245) — counts entiers ──
   const ventesExterne = extractSection([
