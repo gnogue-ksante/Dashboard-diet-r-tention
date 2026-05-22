@@ -1436,6 +1436,37 @@ function parseHebdoData(rows) {
     return result;
   }
 
+  // ── Find rows by name in col C (robust: works even if rows are inserted/deleted) ──
+  function findRowByName(searchName, startRow, endRow) {
+    const s = searchName.toLowerCase().trim();
+    for(let i = startRow; i <= Math.min(endRow, rows.length-1); i++) {
+      const cell = String(rows[i][2] || '').toLowerCase().trim();
+      if(cell === s || cell.startsWith(s)) return i;
+    }
+    return -1;
+  }
+
+  // ── Extract section by searching names in col C ──
+  function extractSectionBySearch(searches, startRow, endRow) {
+    const result = {};
+    searches.forEach(({key, searches: names}) => {
+      for(const name of names) {
+        const idx = findRowByName(name, startRow, endRow);
+        if(idx >= 0) {
+          const row = rows[idx] || [];
+          const vals = weekMap.map(w => num(row[w.col]));
+          result[key] = { name: key, vals,
+            weeks: weekMap.map(w=>w.week),
+            years: weekMap.map(w=>w.year),
+            labels: weekMap.map(w=>w.label)
+          };
+          break;
+        }
+      }
+    });
+    return result;
+  }
+
   // ── TAUX DE VENTE (rows 173-193, idx 172-192) ──
   const venteInterne = extractSection([
     {name:'Anaïs',    rowIdx:174},
@@ -1513,42 +1544,43 @@ function parseHebdoData(rows) {
     {name:'TOTAL',    rowIdx:311},
   ]);
 
-  // ── RDV RÉALISÉS INTERNE (rows 196-206, idx 195-205) ──
-  const rdvInterne = extractSection([
-    {name:'Anaïs',    rowIdx:198},
-    {name:'Barbara',  rowIdx:199},
-    {name:'Inès',     rowIdx:201},
-    {name:'Sophiane', rowIdx:204},
-    {name:'TOTAL',    rowIdx:206},
-  ]);
+  // ── RDV RÉALISÉS INTERNE — recherche par nom en col C (robuste aux décalages de lignes) ──
+  // Section header = 'RDV réalisés-Interne' ou 'RDV réalisés / semaines'
+  const rdvIntSectionStart = rows.findIndex((r,i) => i>180 && String(r[2]||'').includes('RDV') && String(r[2]||'').toLowerCase().includes('interne'));
+  const rdvInterne = extractSectionBySearch([
+    {key:'anaïs',    searches:['anais .','anaïs kempa','anaïs','anais']},
+    {key:'barbara',  searches:['barbara kemp','barbara']},
+    {key:'inès',     searches:['ines dos santos','inès','ines']},
+    {key:'sophiane', searches:['sophiane kail','sophiane']},
+    {key:'total',    searches:['total général','total general']},
+  ], rdvIntSectionStart > 0 ? rdvIntSectionStart : 195, rdvIntSectionStart > 0 ? rdvIntSectionStart + 15 : 210);
 
-  // ── RDV RÉALISÉS EXTERNE (rows 208-216, idx 207-215) ──
-  const rdvExterne = extractSection([
-    {name:'Amanda',   rowIdx:209},
-    {name:'Axelle',   rowIdx:210},
-    {name:'Charlotte',rowIdx:211},
-    {name:'Louise',   rowIdx:213},
-    {name:'Nathalie', rowIdx:215},
-    {name:'Rose',     rowIdx:212},
-    {name:'TOTAL',    rowIdx:216},
-  ]);
+  // ── RDV RÉALISÉS EXTERNE — recherche par nom en col C ──
+  const rdvExtSectionStart = rows.findIndex((r,i) => i>200 && String(r[2]||'').includes('RDV') && String(r[2]||'').toLowerCase().includes('externe') && !String(r[2]||'').includes('2'));
+  const rdvExterne = extractSectionBySearch([
+    {key:'amanda',   searches:['amanda clark','amanda']},
+    {key:'axelle',   searches:['axelle regnault','axelle']},
+    {key:'charlotte',searches:['charlotte perat','charlotte']},
+    {key:'louise',   searches:['louise ballesteros','louise']},
+    {key:'nathalie', searches:['nathalie somville','nathalie']},
+    {key:'rose',     searches:['laura rose devienne','laura rose','laura']},
+    {key:'total',    searches:['total général','total general']},
+  ], rdvExtSectionStart > 0 ? rdvExtSectionStart : 207, rdvExtSectionStart > 0 ? rdvExtSectionStart + 20 : 225);
 
-  // ── VENTES BRUTES INTERNE (rows 229-237, idx 228-236) — formules GSheet ──
-  // ── VENTES BRUTES INTERNE ──
-  // Les lignes 229-237 (Excel) n'ont pas de nom en col C → mapping ambigu.
-  // On utilise uniquement le fallback taux×RDV pour les internes.
-  const ventesInterne = {}; // intentionnellement vide — fallback taux×RDV utilisé
+  // ── VENTES BRUTES INTERNE — lignes sans nom en col C, mapping ambigu ──
+  const ventesInterne = {}; // fallback taux×RDV utilisé
 
-  // ── VENTES BRUTES EXTERNE (rows 239-246, idx 238-245) — counts entiers ──
-  const ventesExterne = extractSection([
-    {name:'Amanda',   rowIdx:239},
-    {name:'Axelle',   rowIdx:240},
-    {name:'Charlotte',rowIdx:241},
-    {name:'Louise',   rowIdx:243},
-    {name:'Nathalie', rowIdx:245},
-    {name:'Rose',     rowIdx:242},
-    {name:'TOTAL',    rowIdx:246},
-  ]);
+  // ── VENTES BRUTES EXTERNE — recherche par nom en col C ──
+  const ventesBrutesExtSectionStart = rows.findIndex((r,i) => i>225 && String(r[2]||'').toLowerCase().includes('ventes') && String(r[2]||'').toLowerCase().includes('externe'));
+  const ventesExterne = extractSectionBySearch([
+    {key:'amanda',   searches:['amanda']},
+    {key:'axelle',   searches:['axelle']},
+    {key:'charlotte',searches:['charlotte']},
+    {key:'louise',   searches:['louise']},
+    {key:'nathalie', searches:['nath','nathalie']},
+    {key:'rose',     searches:['laura rose','laura','rose']},
+    {key:'total',    searches:['total général','total general']},
+  ], ventesBrutesExtSectionStart > 0 ? ventesBrutesExtSectionStart + 1 : 237, ventesBrutesExtSectionStart > 0 ? ventesBrutesExtSectionStart + 15 : 250);
 
   return {
     weekMap,
