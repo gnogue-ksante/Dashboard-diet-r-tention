@@ -1489,6 +1489,7 @@ function parseHebdoData(rows) {
     {name:'Charlotte',rowIdx:269},
     {name:'Louise',   rowIdx:271},
     {name:'Nathalie', rowIdx:276},
+    {name:'Rose',     rowIdx:270},
     {name:'TOTAL',    rowIdx:279},
   ]);
 
@@ -1508,6 +1509,7 @@ function parseHebdoData(rows) {
     {name:'Charlotte',rowIdx:301},
     {name:'Louise',   rowIdx:303},
     {name:'Nathalie', rowIdx:308},
+    {name:'Rose',     rowIdx:302},
     {name:'TOTAL',    rowIdx:311},
   ]);
 
@@ -2067,7 +2069,7 @@ function buildSatTable(idxs, weeks) {
   <tr style="background:var(--kd-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--kd-d);padding:4px 8px">EXTERNES</td></tr>
   ${row('amanda','Amanda','noteExterne','bdg-ext','Ext.')}${row('axelle','Axelle','noteExterne','bdg-ext','Ext.')}
   ${row('charlotte','Charlotte','noteExterne','bdg-ext','Ext.')}${row('louise','Louise','noteExterne','bdg-ext','Ext.')}
-  ${row('nathalie','Nathalie','noteExterne','bdg-ext','Ext.')}
+  ${row('nathalie','Nathalie','noteExterne','bdg-ext','Ext.')}${row('rose','Rose','noteExterne','bdg-ext','Ext.')}
   </tbody></table></div>
   <div class="ref-bar"><span class="c-g">≥9.0/10</span> <span class="c-a">≥8.0/10</span> <span class="c-r">&lt;8.0/10</span></div></div>`;
 }
@@ -2099,7 +2101,7 @@ function buildJoignTable(idxs, weeks) {
   <tr style="background:var(--kd-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--kd-d);padding:4px 8px">EXTERNES</td></tr>
   ${row('amanda','Amanda','joignExterne','bdg-ext','Ext.')}${row('axelle','Axelle','joignExterne','bdg-ext','Ext.')}
   ${row('charlotte','Charlotte','joignExterne','bdg-ext','Ext.')}${row('louise','Louise','joignExterne','bdg-ext','Ext.')}
-  ${row('nathalie','Nathalie','joignExterne','bdg-ext','Ext.')}
+  ${row('nathalie','Nathalie','joignExterne','bdg-ext','Ext.')}${row('rose','Rose','joignExterne','bdg-ext','Ext.')}
   </tbody></table></div>
   <div class="ref-bar">Joignabilité = appels aboutis / appels tentés · <span class="c-g">≥85%</span> <span class="c-a">≥70%</span> <span class="c-r">&lt;70%</span></div></div>`;
 }
