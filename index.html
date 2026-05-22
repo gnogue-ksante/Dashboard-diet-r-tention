@@ -2155,6 +2155,17 @@ function buildDashboard({ newAllData, newREF, newDiets, periodLabels, periodObsD
   if(!window._obsDates) window._obsDates = [];
   window._obsDates.length=0;
   if(periodObsDates) periodObsDates.forEach(d=>window._obsDates.push(d));
+  // DEBUG: show what obsdates were parsed
+  console.log('=== _obsDates ===', window._obsDates.map((d,i)=>i+': '+(d?d.toISOString():'null')));
+  console.log('=== P (periods) ===', P);
+  if(window._hebdoData) {
+    console.log('=== weekMap first/last ===', window._hebdoData.weekMap[0], window._hebdoData.weekMap[window._hebdoData.weekMap.length-1]);
+    P.forEach((_,pi)=>{
+      const idx=_getObsWeekIdx(pi, window._hebdoData);
+      const wk=window._hebdoData.weekMap[idx];
+      console.log('Period',pi,'('+P[pi]+') → obsDate='+( window._obsDates[pi]?window._obsDates[pi].toISOString():'null')+' → cutoff idx='+idx+' week='+(wk?wk.label:'?'));
+    });
+  }
   Object.assign(REF, newREF);
   Object.assign(allData, newAllData);
   // Store hebdo data globally
