@@ -1112,10 +1112,6 @@ function parseSheetData(rows) {
   // Row 2 (index 2) = header: Marque | Catégorie | Diet | periods...
   const obsRow   = rows[0] || [];
   const labelRow = rows[1] || [];
-  // DEBUG
-  console.log('obsRow cols 3-8:', obsRow.slice(3,8));
-  console.log('labelRow cols 3-8:', labelRow.slice(3,8));
-  console.log('rows[2] cols 3-8:', (rows[2]||[]).slice(3,8));
 
   // Parse an observation date cell → JS Date
   function parseObsDate(raw) {
@@ -1753,10 +1749,11 @@ function buildActivitePanel() {
   }
 
   const allWeeks = h_data.weekMap;
-  // Default: observation window for period 0
+  // Default: observation window for period 0 (most recent)
   const _defWin = _getObsWindow(0, h_data);
+  // If no obs window found yet (obsDate null), fall back to last 8 weeks
   const last8Idxs = _defWin.idxs.length ? _defWin.idxs : allWeeks.map((_,i)=>i).slice(-8);
-  const last8Weeks = last8Idxs.map(i=>allWeeks[i]);
+  const last8Weeks = last8Idxs.map(i=>allWeeks[i]).filter(Boolean);
 
   function pct(v,d=1){return v===null||v===undefined?'—':(v*100).toFixed(d)+'%';}
   function ntv(v){return v===null||v===undefined?'—':v.toFixed(1)+'/10';}
@@ -1779,7 +1776,7 @@ function buildActivitePanel() {
   const go = lastVal(h_data.occupation['total']);
   const gn = lastVal(h_data.noteInterne['total']||h_data.noteExterne['total']);
   const gj = lastVal(h_data.joignInterne['total']||h_data.joignExterne['total']);
-  const lastW = allWeeks[allWeeks.length-1];
+  const lastW = last8Weeks.length ? last8Weeks[last8Weeks.length-1] : allWeeks[allWeeks.length-1];
 
   let h = `<div class="hcard">
     <div class="av" style="background:#FFF3E0;color:#E65100;border-color:#FFCC80;font-size:13px;font-weight:700">📅</div>
@@ -1793,7 +1790,7 @@ function buildActivitePanel() {
   h += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
     <div class="kpi-c"><div class="kpi-lbl">Taux de vente global</div>
       <div class="kpi-val" style="color:${gv!==null?(gv>=0.2?'#16a34a':gv>=0.1?'#d97706':'#dc2626'):'inherit'}">${pct(gv,1)}</div>
-      <div class="kpi-sub">S${lastW.week} ${lastW.year} · toutes diéts</div></div>
+      <div class="kpi-sub">S${lastW?lastW.week:'?'} ${lastW?lastW.year:''} · dernière semaine de la fenêtre</div></div>
     <div class="kpi-c"><div class="kpi-lbl">Taux d'occupation</div>
       <div class="kpi-val" style="color:${go!==null?(go>=0.85?'#16a34a':go>=0.7?'#d97706':'#dc2626'):'inherit'}">${pct(go,1)}</div>
       <div class="kpi-sub">Internes · dernière semaine</div></div>
@@ -1807,6 +1804,16 @@ function buildActivitePanel() {
 
   // Period selector for correlation tab
   const ltvPeriods = P; // from LTV&Marges
+  // Build info for current window
+  const _winInfo0 = _getObsWindow(0, h_data);
+  const _winStart0 = _winInfo0.weeks[0] ? _winInfo0.weeks[0].label : '?';
+  const _winEnd0   = _winInfo0.weeks[_winInfo0.weeks.length-1] ? _winInfo0.weeks[_winInfo0.weeks.length-1].label : '?';
+
+  h += `<div id="act-window-info" style="font-size:12px;color:var(--color-text-secondary);padding:8px 12px;background:var(--color-background-secondary);border-radius:8px;margin-bottom:10px;border-left:3px solid #5B0F9E">
+    <strong>Fenêtre d'observation :</strong> <span id="act-win-label">${_winStart0} → ${_winEnd0}</span>
+    &nbsp;·&nbsp; Début = 1ère semaine du recrutement · Fin = semaine précédant la date d'observation (ligne 1, onglet LTV&Marges)
+  </div>`;
+
   h += `<div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
     <span style="font-size:11px;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.07em">Période analysée :</span>
     ${ltvPeriods.map((lbl,pi)=>`<button class="ct-btn${pi===0?' on':''}" data-act-period="${pi}" onclick="setActPeriod(${pi})" style="font-size:11px">${lbl}</button>`).join('')}
@@ -2119,7 +2126,7 @@ function buildCorrPanel(pi) {
       <td class="${vcl}" style="font-family:var(--mono);font-weight:600">${(r.avgVente*100).toFixed(1)}%</td>
       <td class="${mcl}" style="font-family:var(--mono)">${r.marge.toLocaleString('fr-FR')} €</td>
       <td class="${r.mvsDB>=1.3?'c-g':r.mvsDB>=1.1?'c-a':'c-r'}" style="font-family:var(--mono)">×${r.mvsDB.toFixed(2)}</td>
-      <td style="font-family:var(--mono);color:var(--color-text-secondary)">${r.weeks}</td>
+      <td style="font-family:var(--mono);color:var(--color-text-secondary)">${r.weeksCount||0}</td>
       <td style="font-size:11px;font-weight:600;color:${sigColor}">${signal}</td>
     </tr>`;
   });
@@ -2144,6 +2151,13 @@ function setActPeriod(pi) {
   document.querySelectorAll('[data-act-period]').forEach(b=>{
     b.classList.toggle('on', parseInt(b.dataset.actPeriod)===pi);
   });
+  // Update window info label
+  const _wl = document.getElementById('act-win-label');
+  if(_wl) {
+    const _ws = wks[0] ? wks[0].label : '?';
+    const _we = wks[wks.length-1] ? wks[wks.length-1].label : '?';
+    _wl.textContent = _ws + ' → ' + _we;
+  }
 
   // Rebuild period-dependent tab contents
   const ve=document.getElementById('act-vente-content');
@@ -2168,16 +2182,6 @@ function buildDashboard({ newAllData, newREF, newDiets, periodLabels, periodObsD
   window._obsDates.length=0;
   if(periodObsDates) periodObsDates.forEach(d=>window._obsDates.push(d));
   // DEBUG: show what obsdates were parsed
-  console.log('=== _obsDates ===', window._obsDates.map((d,i)=>i+': '+(d?d.toISOString():'null')));
-  console.log('=== P (periods) ===', P);
-  if(window._hebdoData) {
-    console.log('=== weekMap first/last ===', window._hebdoData.weekMap[0], window._hebdoData.weekMap[window._hebdoData.weekMap.length-1]);
-    P.forEach((_,pi)=>{
-      const idx=_getObsWeekIdx(pi, window._hebdoData);
-      const wk=window._hebdoData.weekMap[idx];
-      console.log('Period',pi,'('+P[pi]+') → obsDate='+( window._obsDates[pi]?window._obsDates[pi].toISOString():'null')+' → cutoff idx='+idx+' week='+(wk?wk.label:'?'));
-    });
-  }
   Object.assign(REF, newREF);
   Object.assign(allData, newAllData);
   // Store hebdo data globally
