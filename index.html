@@ -1704,9 +1704,9 @@ function computeCorrelation(diets, hebdo, pi) {
     const dKey = d.name.toLowerCase();
     const vData = hebdo.venteInterne[dKey] || hebdo.venteExterne[dKey];
     
-    // Marge for this specific period
-    const marge = (d.mDB && d.mDB[pi] !== undefined) ? d.mDB[pi] : (d.mDB ? d.mDB[0] : 0);
-    const mvsDB = (d.mvsDB && d.mvsDB[pi] !== undefined) ? d.mvsDB[pi] : (d.mvsDB ? d.mvsDB[0] : 0);
+    // Marge TOTALE (ALL marques) pour la période
+    const marge = (d.mTOT && d.mTOT[pi] !== undefined) ? d.mTOT[pi] : (d.mTOT ? d.mTOT[0] : 0);
+    const mvsTOT = (d.mvsTOT && d.mvsTOT[pi] !== undefined) ? d.mvsTOT[pi] : (d.mvsTOT ? d.mvsTOT[0] : 0);
 
     if(!vData || !vData.vals) return;
 
@@ -1738,7 +1738,7 @@ function computeCorrelation(diets, hebdo, pi) {
       meta: getDietMeta(d.name),
       avgVente,
       marge: marge || 0,
-      mvsDB: mvsDB || 0,
+      mvsDB: mvsTOT || 0,
       weeksCount: obsWin.idxs.filter(i => { const r = rdvData ? rdvData.vals[i] : null; return r !== null && r > 0; }).length,
       status: getDietMeta(d.name).status,
       obsStart: obsWin.weeks[0] ? obsWin.weeks[0].label : '?',
@@ -2261,8 +2261,8 @@ function buildCorrPanel(pi) {
   <thead><tr>
     <th>Diét</th><th>Statut</th>
     <th>Taux de vente moy.<br><span style="font-weight:400;font-size:10px">sur la période</span></th>
-    <th>Marge/client<br><span style="font-weight:400;font-size:10px">cohorte DB</span></th>
-    <th>× vs hors-suivi<br><span style="font-weight:400;font-size:10px">même cohorte</span></th>
+    <th>Marge/client<br><span style="font-weight:400;font-size:10px">ALL marques</span></th>
+    <th>× vs hors-suivi<br><span style="font-weight:400;font-size:10px">ALL marques</span></th>
     <th>Semaines<br><span style="font-weight:400;font-size:10px">observées</span></th>
     <th>Signal</th>
   </tr></thead><tbody>`;
@@ -2296,7 +2296,7 @@ function buildCorrPanel(pi) {
   });
 
   h += `</tbody></table></div>
-  <div class="ref-bar">Taux de vente moy. = moyenne sur ${obsStart} → ${obsEnd} · Marge/client = cohorte ${P[pi]||''} · Exclu si 0 RDV · <strong>r = ${corr!==null?corr.toFixed(2):'n/a'}</strong></div>
+  <div class="ref-bar">Taux de vente moy. = moyenne sur ${obsStart} → ${obsEnd} · Marge/client = ALL marques · cohorte ${P[pi]||''} · Exclu si 0 RDV · <strong>r = ${corr!==null?corr.toFixed(2):'n/a'}</strong></div>
   </div>`;
   return h;
 }
