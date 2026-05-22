@@ -1,3 +1,4 @@
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1106,71 +1107,59 @@ function showError(msg) {
 function parseSheetData(rows) {
   setStatus('Analyse de la structure…');
 
-  // ── Find header row (row 2 in sheet = index 1) ──
-  // Header row has: col0=Marque, col1=Catégorie, col2=Diet, col3=empty, col4+=periods
+  // Row 0 (index 0) = observation dates (ISO "2026-05-18" or "M/YY" like "5/26")
+  // Row 1 (index 1) = period labels like "11/25 à 01/26"
+  // Row 2 (index 2) = header: Marque | Catégorie | Diet | periods...
+  const obsRow   = rows[0] || [];
+  const labelRow = rows[1] || [];
+
+  // Parse an observation date cell → JS Date
+  function parseObsDate(raw) {
+    if(!raw) return null;
+    const s = String(raw).trim();
+    // ISO "2026-05-18" (updated Apps Script)
+    const m1 = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(m1) return new Date(parseInt(m1[1]), parseInt(m1[2])-1, parseInt(m1[3]));
+    // "M/YY" e.g. "5/26" → use day 18 (matches typical obs dates 15-18 of month)
+    const m2 = s.match(/^(\d{1,2})\/(\d{2})$/);
+    if(m2) return new Date(2000+parseInt(m2[2]), parseInt(m2[1])-1, 18);
+    // French "18-mai-2026"
+    const mFr = {jan:0,fév:1,mar:2,avr:3,mai:4,jun:5,jul:6,aoû:7,sep:8,oct:9,nov:10,déc:11};
+    const m3 = s.match(/(\d+)-([a-zéû]+)-(\d{4})/i);
+    if(m3) { const mo=mFr[m3[2].toLowerCase().slice(0,3)]; if(mo!==undefined) return new Date(parseInt(m3[3]),mo,parseInt(m3[1])); }
+    return null;
+  }
+
+  // Find header row and build periodCols with {col, label, obsDate}
   let headerRow = -1;
-  let periodCols = []; // {col, label}
+  let periodCols = []; // {col, label, obsDate}
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     if (String(r[0]||'').trim()==='Marque' || String(r[1]||'').trim()==='Catégorie') {
       headerRow = i;
-      // Start from col 3 (D) since user inserts new periods in column D
+      // Period labels are in this row, obs dates are in rows[0]
       for (let c = 3; c < r.length; c++) {
         const lbl = String(r[c]||'').trim();
-        if (lbl && lbl.includes('/') && lbl.length > 3) periodCols.push({col:c, label:lbl});
-      }
-      break;
-    }
-    // Also try row 1 pattern: check if row 0 has dates and row 1 has string labels
-    if (i === 1 && String(r[0]||'').trim()==='DB') {
-      // Header is row before this one
-      headerRow = 0;
-      const prevRow = rows[0];
-      for (let c = 4; c < prevRow.length; c++) {
-        const v = prevRow[c];
-        if (v) {
-          // Could be a date object or string like "10/25 à 12/25"
-          const lbl = v instanceof Date
-            ? formatDatePeriod(v)
-            : String(v).trim();
-          if (lbl) periodCols.push({col:c, label:lbl});
+        if (lbl && lbl.includes('/') && lbl.length > 3) {
+          periodCols.push({col:c, label:lbl, obsDate: parseObsDate(obsRow[c])});
         }
       }
       break;
     }
   }
 
-  // Fallback: scan for first row with period-like content in col 4
-  if (headerRow === -1) {
-    for (let i = 0; i < Math.min(10, rows.length); i++) {
-      const r = rows[i];
-      if (r[4] && (String(r[4]).includes('/') || r[4] instanceof Date)) {
-        headerRow = i;
-        for (let c = 4; c < r.length; c++) {
-          if (r[c]) {
-            const lbl = r[c] instanceof Date ? formatDatePeriod(r[c]) : String(r[c]).trim();
-            if (lbl) periodCols.push({col:c, label:lbl});
-          }
-        }
-        break;
+  // Fallback: labelRow has period strings, obsRow has dates
+  if(periodCols.length === 0) {
+    for(let c = 3; c < labelRow.length; c++) {
+      const lbl = String(labelRow[c]||'').trim();
+      if(lbl && lbl.includes('/') && lbl.length > 3) {
+        periodCols.push({col:c, label:lbl, obsDate: parseObsDate(obsRow[c])});
       }
     }
   }
 
-  if (periodCols.length === 0) {
-    // Last resort: try to find period info in row 0 (dates) or row 1 (text)
-    for (let c = 3; c < (rows[0]||[]).length; c++) {
-      const v0 = rows[0][c], v1 = (rows[1]||[])[c];
-      const v = v0 || v1;
-      if (v) {
-        const lbl = v instanceof Date ? formatDatePeriod(v) : String(v).trim();
-        if (lbl && lbl !== '') periodCols.push({col:c, label:lbl});
-      }
-    }
-  }
-
-  if (periodCols.length === 0) throw new Error('Aucune période trouvée dans le sheet. Vérifier que la ligne 2 contient les libellés de période (ex: "10/25 à 12/25").');
+  if (periodCols.length === 0) throw new Error('Aucune période trouvée dans le sheet.');
 
   // Format period labels
   function formatDatePeriod(d) {
