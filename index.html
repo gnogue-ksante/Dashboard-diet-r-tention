@@ -1533,11 +1533,32 @@ function parseHebdoData(rows) {
     {name:'TOTAL',    rowIdx:216},
   ]);
 
+  // ── VENTES BRUTES INTERNE (rows 229-237, idx 228-236) — formules GSheet ──
+  const ventesInterne = extractSection([
+    {name:'Anaïs',    rowIdx:228},
+    {name:'Barbara',  rowIdx:230},
+    {name:'Inès',     rowIdx:233},
+    {name:'Sophiane', rowIdx:234},
+    {name:'TOTAL',    rowIdx:236},
+  ]);
+
+  // ── VENTES BRUTES EXTERNE (rows 239-246, idx 238-245) — counts entiers ──
+  const ventesExterne = extractSection([
+    {name:'Amanda',   rowIdx:239},
+    {name:'Axelle',   rowIdx:240},
+    {name:'Charlotte',rowIdx:241},
+    {name:'Louise',   rowIdx:243},
+    {name:'Nathalie', rowIdx:245},
+    {name:'Rose',     rowIdx:242},
+    {name:'TOTAL',    rowIdx:246},
+  ]);
+
   return {
     weekMap,
     weeksForPeriod,  // function: periodStr → weekMap entries
     venteInterne, venteExterne,
     rdvInterne, rdvExterne,
+    ventesInterne, ventesExterne,
     occupation, remplissage,
     joignInterne, joignExterne,
     noteInterne, noteExterne,
@@ -1692,17 +1713,23 @@ function computeCorrelation(diets, hebdo, pi) {
 
     if(!vData || !vData.vals) return;
 
-    // True taux de vente = sum(ventes) / sum(RDV) sur la fenêtre
-    // ventes_i = taux_i * rdv_i  (taux already = ventes/rdv in the sheet)
+    // True taux de vente = sum(ventes) / sum(RDV)
+    // Ventes brutes disponibles pour internes ET externes
     const rdvData = hebdo.rdvInterne[dKey] || hebdo.rdvExterne[dKey];
+    const ventesData = (hebdo.ventesInterne && hebdo.ventesInterne[dKey])
+                    || (hebdo.ventesExterne && hebdo.ventesExterne[dKey])
+                    || null;
     let totalVentes = 0, totalRdv = 0;
     obsWin.idxs.forEach(i => {
-      const taux = vData.vals[i];
-      const rdv  = rdvData ? rdvData.vals[i] : null;
-      if(taux !== null && !isNaN(taux) && rdv !== null && rdv > 0) {
-        totalVentes += taux * rdv;
-        totalRdv    += rdv;
+      const rdv = rdvData ? rdvData.vals[i] : null;
+      if(rdv === null || rdv <= 0) return;
+      if(ventesData && ventesData.vals[i] !== null) {
+        totalVentes += ventesData.vals[i];
+      } else {
+        const taux = vData.vals[i];
+        if(taux !== null && !isNaN(taux)) totalVentes += taux * rdv;
       }
+      totalRdv += rdv;
     });
 
     // Exclude if no RDV data
@@ -1753,12 +1780,15 @@ function buildTopKPIsHTML(idxs, wks) {
     const vals=idxs.map(i=>data.vals[i]).filter(v=>v!==null&&!isNaN(v));
     return vals.length?vals.reduce((a,b)=>a+b)/vals.length:null;
   }
-  function weightedVente(tauxData, rdvData, idxs){
+  function weightedVente(tauxData, rdvData, ventesData, idxs){
     if(!tauxData||!tauxData.vals) return null;
     let tv=0, tr=0;
     idxs.forEach(i=>{
-      const t=tauxData.vals[i]; const r=rdvData?rdvData.vals[i]:null;
-      if(t!==null&&!isNaN(t)&&r!==null&&r>0){tv+=t*r;tr+=r;}
+      const r=rdvData?rdvData.vals[i]:null;
+      if(r===null||r<=0) return;
+      if(ventesData&&ventesData.vals[i]!==null) { tv+=ventesData.vals[i]; }
+      else { const t=tauxData.vals[i]; if(t!==null&&!isNaN(t)) tv+=t*r; }
+      tr+=r;
     });
     return tr>0 ? tv/tr : null;
   }
@@ -1766,6 +1796,7 @@ function buildTopKPIsHTML(idxs, wks) {
   const gv = weightedVente(
     h_data.venteExterne['global']||h_data.venteInterne['total'],
     h_data.rdvExterne ? h_data.rdvExterne['total'] : null,
+    (h_data.ventesExterne && h_data.ventesExterne['total']) ? h_data.ventesExterne['total'] : null,
     idxs
   );
   const go = avgVals(h_data.occupation['total'], idxs);
@@ -1803,12 +1834,15 @@ function buildSyntheseTable(idxs, weeks) {
     const vals=idxs.map(i=>data.vals[i]).filter(v=>v!==null&&!isNaN(v));
     return vals.length?vals.reduce((a,b)=>a+b)/vals.length:null;
   }
-  function weightedVente(tauxData, rdvData, idxs){
+  function weightedVente(tauxData, rdvData, ventesData, idxs){
     if(!tauxData||!tauxData.vals) return null;
     let tv=0, tr=0;
     idxs.forEach(i=>{
-      const t=tauxData.vals[i]; const r=rdvData?rdvData.vals[i]:null;
-      if(t!==null&&!isNaN(t)&&r!==null&&r>0){tv+=t*r;tr+=r;}
+      const r=rdvData?rdvData.vals[i]:null;
+      if(r===null||r<=0) return;
+      if(ventesData&&ventesData.vals[i]!==null) { tv+=ventesData.vals[i]; }
+      else { const t=tauxData.vals[i]; if(t!==null&&!isNaN(t)) tv+=t*r; }
+      tr+=r;
     });
     return tr>0 ? tv/tr : avgVals(tauxData, idxs);
   }
@@ -1835,7 +1869,8 @@ function buildSyntheseTable(idxs, weeks) {
   ];
   let rows = '';
   synthDiets.forEach(d=>{
-    const vv=weightedVente(h_data[d.vSrc][d.key], h_data[d.rdvSrc]?h_data[d.rdvSrc][d.key]:null, idxs);
+    const ventesKey = (h_data.ventesInterne&&h_data.ventesInterne[d.key]) ? h_data.ventesInterne[d.key] : (h_data.ventesExterne?h_data.ventesExterne[d.key]:null);
+    const vv=weightedVente(h_data[d.vSrc][d.key], h_data[d.rdvSrc]?h_data[d.rdvSrc][d.key]:null, ventesKey, idxs);
     const ov=d.oSrc?avgVals(h_data[d.oSrc][d.key], idxs):null;
     const nv=avgVals(h_data[d.nSrc][d.key], idxs);
     const jv=avgVals(h_data[d.jSrc][d.key], idxs);
@@ -2031,15 +2066,17 @@ function buildVenteTable(idxs, weeks) {
     const d=h_data[src][key]; if(!d) return '';
     const rdvSrc = src==='venteInterne' ? h_data.rdvInterne : h_data.rdvExterne;
     const rdvD = rdvSrc ? rdvSrc[key] : null;
+    const ventesD = (h_data.ventesInterne&&h_data.ventesInterne[key]) || (h_data.ventesExterne&&h_data.ventesExterne[key]) || null;
     const vals=idxs.map(i=>d.vals[i]);
-    // Exclude diet from avg if ALL values in period are 0 (no RDV)
     const hasRdv = vals.some(v=>v!==null && v>0);
-    if(!hasRdv) return ''; // skip entirely if no RDV on this period
-    // True ratio = sum(taux*rdv) / sum(rdv)
+    if(!hasRdv) return '';
     let totalV=0, totalR=0;
     idxs.forEach(i=>{
-      const t=d.vals[i]; const r=rdvD?rdvD.vals[i]:null;
-      if(t!==null&&!isNaN(t)&&r!==null&&r>0){totalV+=t*r;totalR+=r;}
+      const r=rdvD?rdvD.vals[i]:null;
+      if(r===null||r<=0) return;
+      if(ventesD&&ventesD.vals[i]!==null) { totalV+=ventesD.vals[i]; }
+      else { const t=d.vals[i]; if(t!==null&&!isNaN(t)) totalV+=t*r; }
+      totalR+=r;
     });
     const moy = totalR>0 ? totalV/totalR : (vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1));
     const meta=getDietMeta(name);
@@ -2053,11 +2090,15 @@ function buildVenteTable(idxs, weeks) {
     const d=h_data[src][key]; if(!d) return '';
     const rdvSrc = src==='venteInterne' ? h_data.rdvInterne : h_data.rdvExterne;
     const rdvD = rdvSrc ? rdvSrc[key] : null;
+    const ventesD = (h_data.ventesInterne&&h_data.ventesInterne[key]) || (h_data.ventesExterne&&h_data.ventesExterne[key]) || null;
     const vals=idxs.map(i=>d.vals[i]);
     let totalV=0, totalR=0;
     idxs.forEach(i=>{
-      const t=d.vals[i]; const r=rdvD?rdvD.vals[i]:null;
-      if(t!==null&&!isNaN(t)&&r!==null&&r>0){totalV+=t*r;totalR+=r;}
+      const r=rdvD?rdvD.vals[i]:null;
+      if(r===null||r<=0) return;
+      if(ventesD&&ventesD.vals[i]!==null) { totalV+=ventesD.vals[i]; }
+      else { const t=d.vals[i]; if(t!==null&&!isNaN(t)) totalV+=t*r; }
+      totalR+=r;
     });
     const moy = totalR>0 ? totalV/totalR : vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
     return `<tr style="font-weight:700;background:var(--color-background-secondary)">
