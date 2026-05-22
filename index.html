@@ -1121,10 +1121,18 @@ function parseSheetData(rows) {
   function parseObsDate(raw) {
     if(!raw) return null;
     const s = String(raw).trim();
-    // ISO "2026-05-18" (updated Apps Script)
+    // ISO with timezone "2026-05-17T22:00:00.000Z" — Apps Script actual format
+    if(s.includes('T')) {
+      const d = new Date(s);
+      if(!isNaN(d)) {
+        // Add one day to compensate for UTC offset (date in sheet is local date)
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate()+1);
+      }
+    }
+    // ISO "2026-05-18"
     const m1 = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if(m1) return new Date(parseInt(m1[1]), parseInt(m1[2])-1, parseInt(m1[3]));
-    // "M/YY" e.g. "5/26" → use day 18 (matches typical obs dates 15-18 of month)
+    // "M/YY" e.g. "5/26"
     const m2 = s.match(/^(\d{1,2})\/(\d{2})$/);
     if(m2) return new Date(2000+parseInt(m2[2]), parseInt(m2[1])-1, 18);
     // French "18-mai-2026"
