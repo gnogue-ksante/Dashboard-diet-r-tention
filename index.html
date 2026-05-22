@@ -2025,7 +2025,46 @@ function buildActivitePanel() {
 function buildVenteTable(idxs, weeks) {
   if(!_hebdoData) return '';
   const h_data = _hebdoData;
-  function pct(v){return v===null?'—':(v*100).toFixed(1)+'%';}\n  function cl(v){return v===null?'':v>=0.2?'c-g':v>=0.1?'c-a':'c-r';}\n  function row(key,name,src,badgeCls,badgeTxt){\n    const d=h_data[src][key]; if(!d) return '';\n    const rdvSrc = src==='venteInterne' ? h_data.rdvInterne : h_data.rdvExterne;\n    const rdvD = rdvSrc ? rdvSrc[key] : null;\n    const vals=idxs.map(i=>d.vals[i]);\n    // Exclude diet from avg if ALL values in period are 0 (no RDV)\n    const hasRdv = vals.some(v=>v!==null && v>0);\n    if(!hasRdv) return ''; // skip entirely if no RDV on this period\n    // True ratio = sum(taux*rdv) / sum(rdv)\n    let totalV=0, totalR=0;\n    idxs.forEach(i=>{\n      const t=d.vals[i]; const r=rdvD?rdvD.vals[i]:null;\n      if(t!==null&&!isNaN(t)&&r!==null&&r>0){totalV+=t*r;totalR+=r;}\n    });\n    const moy = totalR>0 ? totalV/totalR : (vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1));\n    const meta=getDietMeta(name);\n    return `<tr><td><div style=\"display:flex;align-items:center;gap:5px\">\n      <div style=\"width:18px;height:18px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700\">${meta.ini}</div>\n      ${name}</div></td><td><span class=\"bdg ${badgeCls}\" style=\"font-size:9px\">${badgeTxt}</span></td>\n      ${vals.map(v=>`<td class=\"${cl(v)}\" style=\"font-family:var(--mono)\">${pct(v)}</td>`).join('')}\n      <td class=\"${cl(moy)}\" style=\"font-family:var(--mono);font-weight:700\">${pct(moy)}</td></tr>`;\n  }\n  function totalRow(key,src,label){\n    const d=h_data[src][key]; if(!d) return '';\n    const rdvSrc = src==='venteInterne' ? h_data.rdvInterne : h_data.rdvExterne;\n    const rdvD = rdvSrc ? rdvSrc[key] : null;\n    const vals=idxs.map(i=>d.vals[i]);\n    let totalV=0, totalR=0;\n    idxs.forEach(i=>{\n      const t=d.vals[i]; const r=rdvD?rdvD.vals[i]:null;\n      if(t!==null&&!isNaN(t)&&r!==null&&r>0){totalV+=t*r;totalR+=r;}\n    });\n    const moy = totalR>0 ? totalV/totalR : vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);\n    return `<tr style=\"font-weight:700;background:var(--color-background-secondary)\">\n      <td colspan=\"2\">${label}</td>\n      ${vals.map(v=>`<td style=\"font-family:var(--mono)\">${v!==null?(v*100).toFixed(1)+'%':'—'}</td>`).join('')}\n      <td style=\"font-family:var(--mono);font-weight:700\">${(moy*100).toFixed(1)}%</td></tr>`;\n  }
+  function pct(v){return v===null?'—':(v*100).toFixed(1)+'%';}
+  function cl(v){return v===null?'':v>=0.2?'c-g':v>=0.1?'c-a':'c-r';}
+  function row(key,name,src,badgeCls,badgeTxt){
+    const d=h_data[src][key]; if(!d) return '';
+    const rdvSrc = src==='venteInterne' ? h_data.rdvInterne : h_data.rdvExterne;
+    const rdvD = rdvSrc ? rdvSrc[key] : null;
+    const vals=idxs.map(i=>d.vals[i]);
+    // Exclude diet from avg if ALL values in period are 0 (no RDV)
+    const hasRdv = vals.some(v=>v!==null && v>0);
+    if(!hasRdv) return ''; // skip entirely if no RDV on this period
+    // True ratio = sum(taux*rdv) / sum(rdv)
+    let totalV=0, totalR=0;
+    idxs.forEach(i=>{
+      const t=d.vals[i]; const r=rdvD?rdvD.vals[i]:null;
+      if(t!==null&&!isNaN(t)&&r!==null&&r>0){totalV+=t*r;totalR+=r;}
+    });
+    const moy = totalR>0 ? totalV/totalR : (vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1));
+    const meta=getDietMeta(name);
+    return `<tr><td><div style="display:flex;align-items:center;gap:5px">
+      <div style="width:18px;height:18px;border-radius:50%;background:${meta.bg};color:${meta.fg};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700">${meta.ini}</div>
+      ${name}</div></td><td><span class="bdg ${badgeCls}" style="font-size:9px">${badgeTxt}</span></td>
+      ${vals.map(v=>`<td class="${cl(v)}" style="font-family:var(--mono)">${pct(v)}</td>`).join('')}
+      <td class="${cl(moy)}" style="font-family:var(--mono);font-weight:700">${pct(moy)}</td></tr>`;
+  }
+  function totalRow(key,src,label){
+    const d=h_data[src][key]; if(!d) return '';
+    const rdvSrc = src==='venteInterne' ? h_data.rdvInterne : h_data.rdvExterne;
+    const rdvD = rdvSrc ? rdvSrc[key] : null;
+    const vals=idxs.map(i=>d.vals[i]);
+    let totalV=0, totalR=0;
+    idxs.forEach(i=>{
+      const t=d.vals[i]; const r=rdvD?rdvD.vals[i]:null;
+      if(t!==null&&!isNaN(t)&&r!==null&&r>0){totalV+=t*r;totalR+=r;}
+    });
+    const moy = totalR>0 ? totalV/totalR : vals.filter(v=>v!==null).reduce((a,b)=>a+b,0)/(vals.filter(v=>v!==null).length||1);
+    return `<tr style="font-weight:700;background:var(--color-background-secondary)">
+      <td colspan="2">${label}</td>
+      ${vals.map(v=>`<td style="font-family:var(--mono)">${v!==null?(v*100).toFixed(1)+'%':'—'}</td>`).join('')}
+      <td style="font-family:var(--mono);font-weight:700">${(moy*100).toFixed(1)}%</td></tr>`;
+  }
   const wh = weeks.map(w=>`<th style="font-size:10px">S${w.week}<span style="opacity:.5;font-size:9px"> ${String(w.year).slice(2)}</span></th>`).join('');
   return `<div class="ltv-sec"><div class="ltv-hd"><span style="font-weight:700;font-size:12px">Taux de vente — ${weeks.length} semaines</span></div>
   <div class="tw"><table><thead><tr><th>Diét</th><th>Statut</th>${wh}<th>Moy.</th></tr></thead><tbody>
