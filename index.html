@@ -2007,6 +2007,7 @@ function buildVenteTable(idxs, weeks) {
   ${row('charlotte','Charlotte','venteExterne','bdg-ext','Ext.')}
   ${row('louise','Louise','venteExterne','bdg-ext','Ext.')}
   ${row('nathalie','Nathalie','venteExterne','bdg-ext','Ext.')}
+  ${row('rose','Rose','venteExterne','bdg-ext','Ext.')}
   ${totalRow('total','venteExterne','TOTAL EXTERNE')}
   ${totalRow('global','venteExterne','🌐 GLOBAL')}
   </tbody></table></div>
@@ -2058,7 +2059,7 @@ function buildSatTable(idxs, weeks) {
   return `<div class="ltv-sec"><div class="ltv-hd"><span style="font-weight:700;font-size:12px">Note client /10 — ${weeks.length} semaines</span></div>
   <div class="tw"><table><thead><tr><th>Diét</th><th>Statut</th>${wh}<th>Moy.</th></tr></thead><tbody>
   <tr style="background:var(--db-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--db);padding:4px 8px">INTERNES</td></tr>
-  ${row('inès','Inès','noteInterne','bdg-int','Int.')}${row('sophiane','Sophiane','noteInterne','bdg-int','Int.')}
+  ${row('anaïs','Anaïs','noteInterne','bdg-int','Int.')}${row('barbara','Barbara','noteInterne','bdg-int','Int.')}${row('inès','Inès','noteInterne','bdg-int','Int.')}${row('sophiane','Sophiane','noteInterne','bdg-int','Int.')}
   <tr style="background:var(--kd-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--kd-d);padding:4px 8px">EXTERNES</td></tr>
   ${row('amanda','Amanda','noteExterne','bdg-ext','Ext.')}${row('axelle','Axelle','noteExterne','bdg-ext','Ext.')}
   ${row('charlotte','Charlotte','noteExterne','bdg-ext','Ext.')}${row('louise','Louise','noteExterne','bdg-ext','Ext.')}
@@ -2090,7 +2091,7 @@ function buildJoignTable(idxs, weeks) {
   return `<div class="ltv-sec"><div class="ltv-hd"><span style="font-weight:700;font-size:12px">Taux de joignabilité — ${weeks.length} semaines</span></div>
   <div class="tw"><table><thead><tr><th>Diét</th><th>Statut</th>${wh}<th>Moy.</th></tr></thead><tbody>
   <tr style="background:var(--db-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--db);padding:4px 8px">INTERNES</td></tr>
-  ${row('anaïs','Anaïs','joignInterne','bdg-int','Int.')}${row('inès','Inès','joignInterne','bdg-int','Int.')}${row('sophiane','Sophiane','joignInterne','bdg-int','Int.')}
+  ${row('anaïs','Anaïs','joignInterne','bdg-int','Int.')}${row('barbara','Barbara','joignInterne','bdg-int','Int.')}${row('inès','Inès','joignInterne','bdg-int','Int.')}${row('sophiane','Sophiane','joignInterne','bdg-int','Int.')}
   <tr style="background:var(--kd-l)"><td colspan="${2+weeks.length+1}" style="font-size:10px;font-weight:700;color:var(--kd-d);padding:4px 8px">EXTERNES</td></tr>
   ${row('amanda','Amanda','joignExterne','bdg-ext','Ext.')}${row('axelle','Axelle','joignExterne','bdg-ext','Ext.')}
   ${row('charlotte','Charlotte','joignExterne','bdg-ext','Ext.')}${row('louise','Louise','joignExterne','bdg-ext','Ext.')}
