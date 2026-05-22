@@ -1715,7 +1715,7 @@ function computeCorrelation(diets, hebdo, pi) {
       avgVente,
       marge: marge || 0,
       mvsDB: mvsDB || 0,
-      weeksCount: obsVals.length,
+      weeksCount: obsWin.idxs.filter(i => { const r = rdvData ? rdvData.vals[i] : null; return r !== null && r > 0; }).length,
       status: getDietMeta(d.name).status,
       obsStart: obsWin.weeks[0] ? obsWin.weeks[0].label : '?',
       obsEnd:   obsWin.weeks[obsWin.weeks.length-1] ? obsWin.weeks[obsWin.weeks.length-1].label : '?',
